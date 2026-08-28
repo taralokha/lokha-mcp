@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Env, ToolDefinition } from "../types";
+import { fetchLokha } from "./http";
 
 export const lokhaPaidTools: ToolDefinition[] = [
   {
@@ -34,7 +35,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetch(`${baseUrl}/api/posts/${slugOrId}`, { headers });
+        const res = await fetchLokha(env, `${baseUrl}/api/posts/${slugOrId}`, { headers });
         if (!res.ok) {
           throw new Error(`Failed to fetch story: HTTP ${res.status}`);
         }
@@ -116,7 +117,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetch(`${baseUrl}/api/posts`, {
+        const res = await fetchLokha(env, `${baseUrl}/api/posts`, {
           method: "POST",
           headers,
           body: JSON.stringify({

@@ -77,3 +77,26 @@ export const httpTools: ToolDefinition[] = [
     },
   },
 ];
+
+/**
+ * Universal Lokha fetch helper using Cloudflare Service Bindings for internal worker-to-worker dispatch
+ */
+export async function fetchLokha(
+  env: Env,
+  path: string,
+  init?: RequestInit
+): Promise<Response> {
+  const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+  const url = path.startsWith("http") ? path : `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+
+  if (env.LOKHA_SERVICE) {
+    try {
+      const serviceReq = new Request(url, init);
+      return await env.LOKHA_SERVICE.fetch(serviceReq);
+    } catch (e) {
+      console.warn("LOKHA_SERVICE fetch error, falling back to public fetch:", e);
+    }
+  }
+
+  return await fetch(url, init);
+}

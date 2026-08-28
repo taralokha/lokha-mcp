@@ -1,4 +1,5 @@
 import { Env, CallerProfile, PlatformRole, ToolDefinition } from "./types";
+import { fetchLokha } from "./tools/http";
 
 /**
  * Timing-safe string comparison to prevent timing attacks
@@ -162,7 +163,7 @@ export async function resolveCallerProfile(
 
   if (tokenCandidate || emailCandidate) {
     try {
-      const verifyRes = await fetch(`${baseUrl}/api/agent/verify`, {
+      const verifyRes = await fetchLokha(env, `${baseUrl}/api/agent/verify`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

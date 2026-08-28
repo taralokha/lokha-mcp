@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Env, ToolDefinition } from "../types";
 import { generateMemberKeyFromEmail, ROLE_QUOTAS } from "../auth";
+import { fetchLokha } from "./http";
 
 export const lokhaFreeTools: ToolDefinition[] = [
   {
@@ -79,12 +80,16 @@ export const lokhaFreeTools: ToolDefinition[] = [
 
       let dbUser: any = null;
       let registeredKey: string | undefined;
+      let fetchDebug = "";
 
       try {
-        const regRes = await fetch(`${baseUrl}/api/agent/register`, {
+        const targetUrl = `${baseUrl}/api/agent/register`;
+        const regRes = await fetchLokha(env, targetUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Lokha-MCP-Gateway/1.0",
             ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
           },
           body: JSON.stringify({
@@ -96,25 +101,35 @@ export const lokhaFreeTools: ToolDefinition[] = [
           }),
         });
 
+        fetchDebug = `HTTP ${regRes.status} ${regRes.statusText}`;
         if (regRes.ok) {
           const regData = (await regRes.json()) as any;
           dbUser = regData.user;
           registeredKey = regData.apiKey;
+        } else {
+          const errText = await regRes.text();
+          fetchDebug += ` - ${errText.substring(0, 300)}`;
         }
-      } catch (e) {
-        console.error("Failed to sync registration with Lokha Turso DB:", e);
+      } catch (e: any) {
+        fetchDebug = `Exception: ${e?.message || e}`;
+      }
+
+      if (!dbUser) {
+        throw new Error(
+          `Failed to register '${normalizedEmail}' with Lokha (${fetchDebug}). BaseUrl: ${baseUrl}`
+        );
       }
 
       const memberKey = registeredKey || (await generateMemberKeyFromEmail(normalizedEmail));
-      const finalUsername = dbUser?.username || derivedUsername;
-      const finalName = dbUser?.name || displayName;
-      const finalRole = dbUser?.role || "subscriber";
+      const finalUsername = dbUser.username || derivedUsername;
+      const finalName = dbUser.name || displayName;
+      const finalRole = dbUser.role || "subscriber";
 
       return {
         status: "success",
-        action: dbUser ? "registered_and_synced" : "registered_and_authenticated",
+        action: "registered_and_synced",
         user: {
-          id: dbUser?.id,
+          id: dbUser.id,
           email: normalizedEmail,
           username: finalUsername,
           name: finalName,
@@ -123,7 +138,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
           memberKey,
           profileUrl: `${baseUrl}/author/${finalUsername}`,
         },
-        message: "You are successfully registered & logged in on lokha.today! You can now execute all Free and Paid MCP tools.",
+        message: "You are successfully registered & verified on lokha.today! You can now execute all Free and Paid MCP tools.",
         howToUse: {
           optionA: `Include header: 'X-Lokha-Member-Key: ${memberKey}'`,
           optionB: `Pass argument: { "memberKey": "${memberKey}", ... }`,
@@ -165,7 +180,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetch(url.toString(), { headers });
+        const res = await fetchLokha(env, url.toString(), { headers });
 
         if (!res.ok) {
           throw new Error(`Lokha API returned HTTP ${res.status}: ${res.statusText}`);
@@ -233,7 +248,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetch(url.toString(), { headers });
+        const res = await fetchLokha(env, url.toString(), { headers });
 
         if (!res.ok) {
           throw new Error(`Lokha search returned HTTP ${res.status}`);
@@ -288,7 +303,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetch(`${baseUrl}/api/authors`, { headers });
+        const res = await fetchLokha(env, `${baseUrl}/api/authors`, { headers });
 
         if (!res.ok) {
           throw new Error(`Lokha API returned HTTP ${res.status}`);

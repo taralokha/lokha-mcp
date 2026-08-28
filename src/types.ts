@@ -9,6 +9,7 @@ export interface Env {
   ENVIRONMENT?: string;
 
   // Lokha & x402 Monetization
+  LOKHA_SERVICE?: Fetcher;
   LOKHA_API_KEY?: string;
   LOKHA_API_URL?: string;
   CDP_API_KEY_NAME?: string;
