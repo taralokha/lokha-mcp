@@ -1,0 +1,17 @@
+# Node dependencies
+node_modules/
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+.dev.vars
+*.pem
+
+# Build and runtime output
+dist/
+.wrangler/
+.mf/
+
+# System files
+.DS_Store

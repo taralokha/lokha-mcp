@@ -1,0 +1,27 @@
+{
+  "name": "personal-mcp-gateway",
+  "version": "1.0.0",
+  "description": "Personal Remote MCP Gateway and Tool Hub on Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coinbase/coinbase-sdk": "^0.25.0",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@x402/core": "^2.23.0",
+    "@x402/evm": "^2.23.0",
+    "agents": "latest",
+    "viem": "^2.55.19",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260825.1",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.123.0"
+  }
+}

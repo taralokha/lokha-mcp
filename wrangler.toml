@@ -1,0 +1,17 @@
+name = "personal-mcp-gateway"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+routes = [
+  { pattern = "mcp.lokha.today", custom_domain = true }
+]
+
+[vars]
+ENVIRONMENT = "production"
+LOKHA_API_URL = "https://lokha.today"
+LOKHA_API_KEY = "lokha_831641c678760451c7ea00ebedb74471453bbc79a2eca8f5"
+
+[[r2_buckets]]
+binding = "R2_STORAGE"
+bucket_name = "personal-mcp-storage"
