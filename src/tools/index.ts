@@ -5,11 +5,13 @@ import { httpTools } from "./http";
 import { upstreamMcpTools } from "./upstream-mcp";
 import { lokhaFreeTools } from "./lokha-free";
 import { lokhaPaidTools } from "./lokha-paid";
+import { lokhaSocialTools } from "./lokha-social";
 import { checkToolAccess, isToolPaymentRequired } from "../auth";
 
 export const allTools: ToolDefinition[] = [
   ...lokhaFreeTools,
   ...lokhaPaidTools,
+  ...lokhaSocialTools,
   ...r2Tools,
   ...httpTools,
   ...upstreamMcpTools,
