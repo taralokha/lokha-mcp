@@ -153,7 +153,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
     scope: "public",
     tier: "free",
     priceUSD: 0.0,
-    requiredRole: "member",
+    requiredRole: "public",
     schema: {
       limit: z.number().optional().default(10).describe("Number of trending stories to retrieve (max: 30)"),
       tag: z.string().optional().describe("Filter by specific topic or tag (e.g. 'ai', 'philosophy', 'governance')"),
@@ -221,7 +221,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
     scope: "public",
     tier: "free",
     priceUSD: 0.0,
-    requiredRole: "member",
+    requiredRole: "public",
     schema: {
       query: z.string().describe("Search keywords or topic (e.g. 'digital sovereignty', 'decentralized AI')"),
       limit: z.number().optional().default(10).describe("Maximum results to return"),
@@ -287,7 +287,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
     scope: "public",
     tier: "free",
     priceUSD: 0.0,
-    requiredRole: "member",
+    requiredRole: "public",
     schema: {
       username: z.string().describe("Author's username on lokha.today (e.g. 'jith', 'lokha', 'editorial')"),
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
@@ -345,7 +345,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
     scope: "public",
     tier: "free",
     priceUSD: 0.0,
-    requiredRole: "member",
+    requiredRole: "public",
     schema: {
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),

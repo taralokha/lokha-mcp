@@ -32,8 +32,30 @@ export function registerAllTools(server: McpServer, env: Env, caller: CallerProf
       tool.description,
       tool.schema as any,
       async (args: any) => {
-        // Enforce role check
-        const access = checkToolAccess(tool, caller);
+        let effectiveCaller = caller;
+        const candidateKey = args?.memberKey || args?.apiKey || args?.key;
+        const candidateEmail = args?.email;
+
+        // If caller was anonymous during handshake but provides credentials in tool args, resolve their profile!
+        if (
+          (!effectiveCaller || effectiveCaller.role === "anonymous") &&
+          (candidateKey || candidateEmail)
+        ) {
+          const { resolveCallerProfile } = await import("../auth");
+          effectiveCaller = await resolveCallerProfile(
+            new Request("https://mcp.lokha.today", {
+              headers: {
+                ...(candidateKey ? { Authorization: `Bearer ${candidateKey}` } : {}),
+                ...(candidateEmail ? { "X-Lokha-Email": candidateEmail } : {}),
+              },
+            }),
+            env,
+            { memberKey: candidateKey, email: candidateEmail }
+          );
+        }
+
+        // Enforce role check against effectiveCaller
+        const access = checkToolAccess(tool, effectiveCaller);
         if (!access.allowed) {
           return {
             isError: true,
@@ -48,10 +70,10 @@ export function registerAllTools(server: McpServer, env: Env, caller: CallerProf
 
         try {
           const result = await (tool.handler as any)(args, env, {
-            isAdmin: caller.isOwner,
-            caller,
-            memberKey: caller.memberKey,
-            isPaid: isToolPaymentRequired(tool, caller),
+            isAdmin: effectiveCaller.isOwner,
+            caller: effectiveCaller,
+            memberKey: effectiveCaller.memberKey || candidateKey,
+            isPaid: isToolPaymentRequired(tool, effectiveCaller),
           });
 
           return {
@@ -159,6 +181,17 @@ export function generateOpenAPISpec(baseUrl: string, caller: CallerProfile) {
       title: "Lokha.today Role-Based MCP Gateway",
       version: "2.0.0",
       description: `Role-Aware MCP Server for lokha.today. Active caller role: '${caller.role}'.`,
+      "x-logo": {
+        url: "https://lokha.today/logo-2.png",
+        backgroundColor: "#07070c",
+        altText: "Lokha Logo",
+      },
+      icon: "https://lokha.today/logo-2.png",
+      contact: {
+        name: "Lokha",
+        url: "https://lokha.today",
+        email: "hello@update.lokha.today",
+      },
     },
     servers: [{ url: baseUrl }],
     paths,

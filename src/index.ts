@@ -54,6 +54,11 @@ export default {
       }
     }
 
+    // 2. Favicon & Brand Asset Routing
+    if (url.pathname === "/favicon.ico" || url.pathname === "/logo.png" || url.pathname === "/icon.png") {
+      return Response.redirect("https://lokha.today/logo-2.png", 302);
+    }
+
     const caller = await resolveCallerProfile(request, env, body);
     const roleInfo = ROLE_QUOTAS[caller.role] || ROLE_QUOTAS.anonymous;
 
@@ -80,6 +85,21 @@ export default {
             status: "active",
             name: "lokha-mcp-gateway",
             version: "2.0.0",
+            icon: "https://lokha.today/logo-2.png",
+            icons: [
+              {
+                src: "https://lokha.today/logo-2.png",
+                sizes: "512x512",
+                type: "image/png",
+              },
+              {
+                src: "https://lokha.today/logo.png",
+                sizes: "110x110",
+                type: "image/png",
+              },
+            ],
+            website: "https://lokha.today",
+            docs: "https://lokha.today/docs",
             caller: {
               id: caller.id,
               email: caller.email || "anonymous",

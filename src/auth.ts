@@ -362,6 +362,11 @@ export function checkToolAccess(
   tool: ToolDefinition,
   caller: CallerProfile
 ): { allowed: boolean; reason?: string } {
+  // If tool is explicitly public
+  if (tool.requiredRole === "public") {
+    return { allowed: true };
+  }
+
   // If tool is explicitly owner/admin only (e.g. R2, raw HTTP, upstream MCPs)
   if (tool.scope === "private" || tool.requiredRole === "owner") {
     if (!caller.isOwner) {
