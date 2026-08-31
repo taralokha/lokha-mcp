@@ -18,13 +18,13 @@ export const lokhaSocialTools: ToolDefinition[] = [
         .describe("Your Lokha Member API Key (or pass in Authorization header)"),
     },
     handler: async (
-      _args: { memberKey?: string },
+      args: { memberKey?: string },
       env: Env,
-      context?: { caller?: any }
+      context?: { caller?: any; memberKey?: string }
     ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const caller = context?.caller;
-      const effectiveKey = caller?.memberKey || env.LOKHA_API_KEY;
+      const effectiveKey = args?.memberKey || context?.memberKey || caller?.memberKey || env.LOKHA_API_KEY;
 
       const headers: Record<string, string> = {
         Accept: "application/json",
@@ -76,13 +76,13 @@ export const lokhaSocialTools: ToolDefinition[] = [
         .describe("Your Lokha Member API Key (or pass in Authorization header)"),
     },
     handler: async (
-      { provider, token }: { provider: "buffer" | "zernio"; token: string; memberKey?: string },
+      { provider, token, memberKey }: { provider: "buffer" | "zernio"; token: string; memberKey?: string },
       env: Env,
-      context?: { caller?: any }
+      context?: { caller?: any; memberKey?: string }
     ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const caller = context?.caller;
-      const effectiveKey = caller?.memberKey || env.LOKHA_API_KEY;
+      const effectiveKey = memberKey || context?.memberKey || caller?.memberKey || env.LOKHA_API_KEY;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -144,6 +144,7 @@ export const lokhaSocialTools: ToolDefinition[] = [
         slugOrId,
         customText,
         providers,
+        memberKey,
       }: {
         slugOrId: string;
         customText?: string;
@@ -151,11 +152,11 @@ export const lokhaSocialTools: ToolDefinition[] = [
         memberKey?: string;
       },
       env: Env,
-      context?: { caller?: any }
+      context?: { caller?: any; memberKey?: string }
     ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const caller = context?.caller;
-      const effectiveKey = caller?.memberKey || env.LOKHA_API_KEY;
+      const effectiveKey = memberKey || context?.memberKey || caller?.memberKey || env.LOKHA_API_KEY;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
