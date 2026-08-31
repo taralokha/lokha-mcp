@@ -90,6 +90,8 @@ export const lokhaPaidTools: ToolDefinition[] = [
         tags = "",
         excerpt = "",
         membersOnly = false,
+        memberKey,
+        email,
       }: {
         title: string;
         content: string;
@@ -105,6 +107,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const apiKey = env.LOKHA_API_KEY;
       const caller = context?.caller;
+      const effectiveKey = memberKey || context?.memberKey || caller?.memberKey || apiKey;
       const isExempt = !context?.isPaid && (caller?.isOwner || caller?.isCurator || caller?.isAuthor || caller?.isPaid);
 
       try {
@@ -113,8 +116,8 @@ export const lokhaPaidTools: ToolDefinition[] = [
           "Accept": "application/json",
           "User-Agent": "Lokha-MCP-Gateway/1.0",
         };
-        if (apiKey) {
-          headers["Authorization"] = `Bearer ${apiKey}`;
+        if (effectiveKey) {
+          headers["Authorization"] = `Bearer ${effectiveKey}`;
         }
 
         const res = await fetchLokha(env, `${baseUrl}/api/posts`, {

@@ -419,7 +419,7 @@ export function isToolPaymentRequired(
   }
 
   // 3. Resident Authors get free drafting/publishing
-  if (caller.isAuthor && tool.name === "lokha_submit_draft") {
+  if (caller.isAuthor && (tool.name === "lokha_submit_draft" || tool.name === "lokha_submit_article_draft")) {
     return false;
   }
 
