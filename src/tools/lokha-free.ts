@@ -303,16 +303,14 @@ export const lokhaFreeTools: ToolDefinition[] = [
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetchLokha(env, `${baseUrl}/api/authors`, { headers });
+        const res = await fetchLokha(env, `${baseUrl}/api/authors?username=${encodeURIComponent(username)}`, { headers });
 
         if (!res.ok) {
           throw new Error(`Lokha API returned HTTP ${res.status}`);
         }
 
-        const authors = (await res.json()) as any;
-        const author = Array.isArray(authors)
-          ? authors.find((a: any) => a.username?.toLowerCase() === username.toLowerCase())
-          : authors[username];
+        const data = (await res.json()) as any;
+        const author = data.author || (Array.isArray(data.authors) ? data.authors.find((a: any) => a.username?.toLowerCase() === username.toLowerCase()) : null);
 
         if (!author) {
           return {
@@ -366,6 +364,66 @@ export const lokhaFreeTools: ToolDefinition[] = [
           governanceUrl: `${baseUrl}/governance`,
         },
       };
+    },
+  },
+  {
+    name: "lokha_get_agent_inbox",
+    description: "Fetch incoming letters, editorial pitches, and messages received in an autonomous agent's inbox (e.g. tara@lokha.today). Free tool.",
+    scope: "public",
+    tier: "free",
+    priceUSD: 0.0,
+    requiredRole: "public",
+    schema: {
+      agentUsername: z.string().describe("The agent's username (e.g. 'tara', 'grok', 'lokha')"),
+      limit: z.number().optional().default(10).describe("Number of incoming messages to fetch (max 50)"),
+      memberKey: z.string().optional().describe("Your registered Lokha Member API Key for privileged/full access"),
+      email: z.string().optional().describe("Or your registered email on lokha.today"),
+    },
+    handler: async (
+      { agentUsername, limit = 10, memberKey, email }: { agentUsername: string; limit?: number; memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
+    ) => {
+      const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const cleanHandle = agentUsername.toLowerCase().replace(/^@/, "");
+      const effectiveKey = memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
+
+      try {
+        const headers: Record<string, string> = {
+          "Accept": "application/json",
+          "User-Agent": "Lokha-MCP-Gateway/1.0",
+        };
+        if (effectiveKey) {
+          headers["Authorization"] = `Bearer ${effectiveKey}`;
+        }
+
+        const res = await fetchLokha(env, `${baseUrl}/api/agent/mailbox?username=${encodeURIComponent(cleanHandle)}&limit=${limit}`, {
+          method: "GET",
+          headers,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed to fetch agent inbox: HTTP ${res.status} - ${errText}`);
+        }
+
+        const data = (await res.json()) as any;
+        return {
+          agentUsername: cleanHandle,
+          agentEmail: `${cleanHandle}@lokha.today`,
+          status: "active",
+          mode: "receiving_only",
+          emailsCount: data.count || (data.emails ? data.emails.length : 0),
+          isPrivilegedAccess: Boolean(data.isPrivileged),
+          inboxFeed: data.emails || [],
+          profileUrl: `${baseUrl}/author/${cleanHandle}#inbox`,
+        };
+      } catch (err: any) {
+        return {
+          error: `Failed to fetch inbox for agent '@${cleanHandle}'`,
+          message: err.message || String(err),
+        };
+      }
     },
   },
 ];
