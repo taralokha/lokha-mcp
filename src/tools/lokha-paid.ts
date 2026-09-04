@@ -80,6 +80,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
       tags: z.string().optional().describe("Comma-separated tags (e.g. 'Decentralization, AI, Crypto')"),
       excerpt: z.string().optional().describe("Short 1-2 sentence preview summary"),
       membersOnly: z.boolean().optional().default(false).describe("Whether the article should be paywalled/members only"),
+      coverImage: z.string().optional().describe("Direct HTTPS image URL for the article cover (e.g. 'https://images.unsplash.com/photo-...'). Do NOT use Markdown syntax or HTML tags."),
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
     },
@@ -89,6 +90,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
         content,
         tags = "",
         excerpt = "",
+        coverImage,
         membersOnly = false,
         memberKey,
         email,
@@ -97,6 +99,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
         content: string;
         tags?: string;
         excerpt?: string;
+        coverImage?: string;
         membersOnly?: boolean;
         memberKey?: string;
         email?: string;
@@ -128,6 +131,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
             content,
             tags,
             excerpt,
+            coverImage,
             membersOnly,
             status: "draft",
             authorEmail: caller?.email,
@@ -178,6 +182,8 @@ export const lokhaPaidTools: ToolDefinition[] = [
       tags: z.string().optional().describe("Comma-separated tags (e.g. 'Decentralization, AI, Crypto')"),
       excerpt: z.string().optional().describe("Short 1-2 sentence preview summary"),
       status: z.enum(["draft", "published"]).optional().default("draft").describe("Submission status: 'draft' or 'published'"),
+      coverImage: z.string().optional().describe("Direct HTTPS image URL for the article cover (e.g. 'https://images.unsplash.com/photo-...'). Do NOT use Markdown syntax or HTML tags."),
+      autoBroadcast: z.boolean().optional().default(true).describe("Whether to automatically syndicate the post to Buffer/Zernio on publish (defaults to true)"),
       membersOnly: z.boolean().optional().default(false).describe("Whether the article should be paywalled/members only"),
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
@@ -188,13 +194,19 @@ export const lokhaPaidTools: ToolDefinition[] = [
         content,
         tags = "",
         excerpt = "",
+        coverImage,
+        autoBroadcast = true,
         status = "draft",
         membersOnly = false,
+        memberKey,
+        email,
       }: {
         title: string;
         content: string;
         tags?: string;
         excerpt?: string;
+        coverImage?: string;
+        autoBroadcast?: boolean;
         status?: "draft" | "published";
         membersOnly?: boolean;
         memberKey?: string;
@@ -206,7 +218,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const apiKey = env.LOKHA_API_KEY;
       const caller = context?.caller;
-      const effectiveKey = caller?.memberKey || context?.memberKey || apiKey;
+      const effectiveKey = memberKey || context?.memberKey || caller?.memberKey || apiKey;
       const isExempt = !context?.isPaid && (caller?.isOwner || caller?.isCurator || caller?.isAuthor || caller?.isPaid);
 
       try {
@@ -227,6 +239,8 @@ export const lokhaPaidTools: ToolDefinition[] = [
             content,
             tags,
             excerpt,
+            coverImage,
+            autoBroadcast,
             membersOnly,
             status,
             authorEmail: caller?.email,
@@ -251,9 +265,11 @@ export const lokhaPaidTools: ToolDefinition[] = [
             slug: result.slug || result.post?.slug,
             title,
             status,
+            coverImage: result.post?.coverImage || coverImage,
             url: result.post?.url || (result.slug ? `${baseUrl}/posts/${result.slug}` : undefined),
             editorStudioUrl: `${baseUrl}/dashboard`,
           },
+          socialBroadcast: result.socialBroadcast || null,
           message: status === "published"
             ? "Your story is live on lokha.today!"
             : "Your story draft has been saved to Lokha Writer Studio!",
