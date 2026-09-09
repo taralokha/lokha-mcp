@@ -2,6 +2,65 @@ import { z } from "zod";
 import { Env, ToolDefinition } from "../types";
 import { fetchLokha } from "./http";
 
+function cleanCoverImage(input?: string | null): string {
+  if (!input) return "";
+  let clean = input.trim();
+  const mdMatch = clean.match(/!\[.*?\]\((https?:\/\/[^\s)]+)\)/i);
+  if (mdMatch) clean = mdMatch[1];
+  const htmlMatch = clean.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+  if (htmlMatch) clean = htmlMatch[1];
+  clean = clean.replace(/^[<"'\s(]+|[>"'\s)]+$/g, "").trim();
+  return /^https?:\/\//i.test(clean) ? clean : "";
+}
+
+function extractFirstImage(content?: string | null): string {
+  if (!content) return "";
+  const mdMatch = content.match(/!\[.*?\]\((https?:\/\/[^\s\)"']+)[^)]*\)/i);
+  if (mdMatch) return mdMatch[1];
+  const htmlMatch = content.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+  if (htmlMatch) return htmlMatch[1];
+  return "";
+}
+
+function stripDuplicateCover(content: string, coverImage?: string | null): string {
+  if (!content || !coverImage) return content;
+  const cleanCover = cleanCoverImage(coverImage);
+  if (!cleanCover) return content;
+  const baseCover = cleanCover.split(/[?#]/)[0].replace(/\/+$/, "").replace(/^https?:\/\//i, "");
+  const gMatch = cleanCover.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{15,})/);
+
+  const matchesCover = (url: string) => {
+    if (!url) return false;
+    const cleanUrl = url.trim().replace(/^https?:\/\//i, "").replace(/&amp;/g, "&");
+    if (cleanUrl === cleanCover.replace(/^https?:\/\//i, "")) return true;
+    const base = cleanUrl.split(/[?#]/)[0].replace(/\/+$/, "");
+    if (base && base === baseCover) return true;
+    if (gMatch) {
+      const gm = cleanUrl.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{15,})/);
+      if (gm && gm[1] === gMatch[1]) return true;
+    }
+    return false;
+  };
+
+  let result = content;
+  result = result.replace(
+    /<(?:p|figure)[^>]*>\s*<img[^>]+src=["']([^"']+)["'][^>]*\/?>\s*<\/(?:p|figure)>/gi,
+    (m, src) => (matchesCover(src) ? "" : m)
+  );
+  result = result.replace(/<img[^>]+src=["']([^"']+)["'][^>]*\/?>/gi, (m, src) =>
+    matchesCover(src) ? "" : m
+  );
+  result = result.replace(
+    /\[\s*!\[.*?\]\((https?:\/\/[^\s\)"']+)(?:[^\)]*)\)\s*\]\([^\)]+\)/gi,
+    (m, src) => (matchesCover(src) ? "" : m)
+  );
+  result = result.replace(
+    /!\[.*?\]\((https?:\/\/[^\s\)"']+)(?:[^\)]*)\)/gi,
+    (m, src) => (matchesCover(src) ? "" : m)
+  );
+  return result.replace(/^\s*\n+/, "").trimStart();
+}
+
 export const lokhaPaidTools: ToolDefinition[] = [
   {
     name: "lokha_read_premium_story",
@@ -76,11 +135,11 @@ export const lokhaPaidTools: ToolDefinition[] = [
     freeForRoles: ["owner", "curator", "author", "subscriber_paid"],
     schema: {
       title: z.string().min(3).describe("Title of the article"),
-      content: z.string().min(20).describe("Full Markdown or HTML content of the article"),
+      content: z.string().min(20).describe("Full Markdown or HTML content of the article. Do NOT include the cover image inside 'content' as markdown (![]()) or HTML, because Lokha displays coverImage as the hero banner at the top of the article."),
       tags: z.string().optional().describe("Comma-separated tags (e.g. 'Decentralization, AI, Crypto')"),
       excerpt: z.string().optional().describe("Short 1-2 sentence preview summary"),
       membersOnly: z.boolean().optional().default(false).describe("Whether the article should be paywalled/members only"),
-      coverImage: z.string().optional().describe("Direct HTTPS image URL for the article cover (e.g. 'https://images.unsplash.com/photo-...'). Do NOT use Markdown syntax or HTML tags."),
+      coverImage: z.string().optional().describe("Direct HTTPS image URL for the article cover (e.g. 'https://images.unsplash.com/photo-...'). Lokha displays this at the top of the article. Do NOT use Markdown syntax or repeat it inside 'content'."),
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
     },
@@ -114,6 +173,15 @@ export const lokhaPaidTools: ToolDefinition[] = [
       const isExempt = !context?.isPaid && (caller?.isOwner || caller?.isCurator || caller?.isAuthor || caller?.isPaid);
 
       try {
+        let finalCover = cleanCoverImage(coverImage);
+        let finalContent = content;
+        if (!finalCover) {
+          finalCover = extractFirstImage(finalContent);
+        }
+        if (finalCover) {
+          finalContent = stripDuplicateCover(finalContent, finalCover);
+        }
+
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           "Accept": "application/json",
@@ -128,10 +196,10 @@ export const lokhaPaidTools: ToolDefinition[] = [
           headers,
           body: JSON.stringify({
             title,
-            content,
+            content: finalContent,
             tags,
             excerpt,
-            coverImage,
+            coverImage: finalCover || undefined,
             membersOnly,
             status: "draft",
             authorEmail: caller?.email,
@@ -178,11 +246,11 @@ export const lokhaPaidTools: ToolDefinition[] = [
     freeForRoles: ["owner", "curator", "author", "subscriber_paid"],
     schema: {
       title: z.string().min(3).describe("Title of the article"),
-      content: z.string().min(20).describe("Full Markdown or HTML content of the article"),
+      content: z.string().min(20).describe("Full Markdown or HTML content of the article. Do NOT include the cover image inside 'content' as markdown (![]()) or HTML, because Lokha displays coverImage as the hero banner at the top of the article."),
       tags: z.string().optional().describe("Comma-separated tags (e.g. 'Decentralization, AI, Crypto')"),
       excerpt: z.string().optional().describe("Short 1-2 sentence preview summary"),
       status: z.enum(["draft", "published"]).optional().default("draft").describe("Submission status: 'draft' or 'published'"),
-      coverImage: z.string().optional().describe("Direct HTTPS image URL for the article cover (e.g. 'https://images.unsplash.com/photo-...'). Do NOT use Markdown syntax or HTML tags."),
+      coverImage: z.string().optional().describe("Direct HTTPS image URL for the article cover (e.g. 'https://images.unsplash.com/photo-...'). Lokha displays this at the top of the article. Do NOT use Markdown syntax or repeat it inside 'content'."),
       autoBroadcast: z.boolean().optional().default(true).describe("Whether to automatically syndicate the post to Buffer/Zernio on publish (defaults to true)"),
       membersOnly: z.boolean().optional().default(false).describe("Whether the article should be paywalled/members only"),
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
@@ -222,6 +290,15 @@ export const lokhaPaidTools: ToolDefinition[] = [
       const isExempt = !context?.isPaid && (caller?.isOwner || caller?.isCurator || caller?.isAuthor || caller?.isPaid);
 
       try {
+        let finalCover = cleanCoverImage(coverImage);
+        let finalContent = content;
+        if (!finalCover) {
+          finalCover = extractFirstImage(finalContent);
+        }
+        if (finalCover) {
+          finalContent = stripDuplicateCover(finalContent, finalCover);
+        }
+
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           "Accept": "application/json",
@@ -236,10 +313,10 @@ export const lokhaPaidTools: ToolDefinition[] = [
           headers,
           body: JSON.stringify({
             title,
-            content,
+            content: finalContent,
             tags,
             excerpt,
-            coverImage,
+            coverImage: finalCover || undefined,
             autoBroadcast,
             membersOnly,
             status,
