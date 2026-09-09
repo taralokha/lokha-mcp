@@ -18,6 +18,9 @@ export interface Env {
   X402_NETWORK?: string;
   X402_FACILITATOR_URL?: string;
   QUICKNODE_RPC_URL?: string;
+  // Social Providers
+  ZERNIO_API_KEY?: string;
+  BUFFER_ACCESS_TOKEN?: string;
 }
 
 export type PlatformRole = "owner" | "curator" | "author" | "subscriber" | "anonymous";

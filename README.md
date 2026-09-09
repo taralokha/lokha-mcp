@@ -10,40 +10,41 @@ The official, secure **Model Context Protocol (MCP)** server for **[lokha.today]
 | :--- | :--- | :--- |
 | **Health Dashboard** | `https://mcp.lokha.today/health` | Live dashboard showing tool catalog and x402 settings |
 | **MCP Protocol Endpoint** | `https://mcp.lokha.today/mcp` | Main MCP endpoint for Claude, ChatGPT, Cursor, and Grok |
-| **OpenAPI 3.1 Spec** | `https://mcp.lokha.today/openapi.json` | OpenAPI schema for ChatGPT Custom GPT Actions |
-| **REST Tool Bridge** | `https://mcp.lokha.today/api/tools/:name` | Direct HTTP POST tool runner with x402 enforcement |
+| **OpenAPI 3.1 Spec** | `https://mcp.lokha.today/openapi.json` | OpenAPI schema for ChatGPT Actions and Grok |
+| **REST Tool Bridge** | `https://mcp.lokha.today/api/tools/:name` | Direct HTTP POST tool runner |
 
 ---
 
-## 💎 Public vs Private Tool Access
+## 💎 Full Social Media Multi-Step Suite (Zernio & Buffer)
 
-### 1. 🌍 Public Tools (Discoverable by Everyone)
-Anyone or any AI client can connect to `https://mcp.lokha.today/mcp` and see all tools:
-* **Onboarding & Authentication:**
-  - `lokha_register_or_login`: Register or log in to get your Member API Key directly inside MCP.
-* **Free Public Member Tools ($0.00):**
-  - `lokha_get_trending`: Get trending essays and curated topics on `lokha.today`.
-  - `lokha_search_articles`: Search articles across `lokha.today` by keywords or tags.
-  - `lokha_get_author_profile`: Fetch public author profiles, bios, and metrics.
-  - `lokha_get_curator_info`: Check the active Resident Curator epoch and election status.
-  - `cf_docs`, `cf_search`: Official Cloudflare documentation and API spec search.
-* **Paid Public Member Tools (x402 Micropayments in USDC):**
-  - `lokha_cast_governance_vote` (**$0.01 USDC**): Cast an onchain curator governance vote.
-  - `lokha_read_premium_story` (**$0.05 USDC**): Read full text of paywalled/members-only stories.
-  - `lokha_submit_draft` (**$0.10 USDC**): Submit drafts to the Lokha Writer Studio.
-  - `lokha_ai_editorial_critique` (**$0.25 USDC**): Deep editorial audit & score from `@lokha` AI.
+Grok, Claude, and ChatGPT can now execute best-in-class multi-step campaigns across 16+ social networks:
 
-### 2. 🔐 Private Admin Tools (Requires `AUTH_TOKEN`)
-* `r2_list_files`, `r2_read_file`, `r2_write_file`, `r2_delete_file`: R2 storage management.
-* `http_request`: Universal HTTP request dispatcher.
-* `cf_execute`: Cloudflare Code Mode sandbox execution.
-* `upstream_mcp_call`: Forwarding to other remote MCP servers.
+### 1. ⚡ Zernio Tools
+* `zernio_list_accounts`: List connected accounts across X/Twitter, LinkedIn, Threads, Bluesky, Instagram, TikTok, Reddit, Facebook, YouTube, etc.
+* `zernio_publish_post`: Standalone publishing, scheduling (`scheduledFor`), drafting, platform targeting, media URLs, and link previews.
+* `zernio_get_queue`: Inspect scheduled queue, drafts, and recent posts with per-network delivery receipts.
+* `zernio_manage_post`: Get details, reschedule, update, or cancel/delete posts by `postId`.
+* `zernio_get_analytics`: Fetch engagement analytics (impressions, clicks, shares) across accounts or posts.
+* `zernio_api_call`: **Universal Raw API Executor** — call ANY Zernio REST endpoint (`/v1/*`), exposing 100% of Zernio's API capabilities.
+
+### 2. ⚡ Buffer GraphQL Tools
+* `buffer_list_channels`: Query Buffer GraphQL API to retrieve connected channels and metadata.
+* `buffer_create_post`: Publish, queue, or schedule posts with media assets across Buffer channels.
+* `buffer_graphql_query`: **Buffer GraphQL Escape Hatch** — execute arbitrary queries or mutations against Buffer's GraphQL API.
+
+### 3. 🎯 Multi-Step Agent Orchestrator
+* `social_multistep_orchestrator`: Coordinated workflows:
+  * `"inspect"`: Discovers all connected channels across both Buffer and Zernio and returns platform limits.
+  * `"preview"`: Previews platform-tailored copy (checks 280-char X limits, formats LinkedIn/Threads copy).
+  * `"broadcast"`: Executes multi-platform distribution across both providers in a single tool call.
+  * `"status"`: Checks queue and delivery status.
+* `lokha_broadcast_to_socials`: Syndicate Lokha articles or broadcast standalone copy.
 
 ---
 
-## 🤖 Connecting to AI Clients (Claude, ChatGPT, Grok, Cursor)
+## 🤖 Connecting to AI Clients (Grok, Claude, ChatGPT, Cursor)
 
-Simply paste the official URL into your AI client:
+Paste the official URL into your AI client:
 ```text
 https://mcp.lokha.today/mcp
 ```

@@ -204,7 +204,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
             membersOnly: Boolean(p.membersOnly),
             author: p.author?.name || p.author?.username || "Editorial",
             publishedAt: p.publishedAt || p.createdAt,
-            url: `${baseUrl}/posts/${p.slug || p.id}`,
+            url: `${baseUrl}/post/${p.slug || p.id}`,
           })),
         };
       } catch (err: any) {
@@ -229,23 +229,24 @@ export const lokhaFreeTools: ToolDefinition[] = [
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
     },
     handler: async (
-      { query, limit = 10 }: { query: string; limit?: number; memberKey?: string; email?: string },
-      env: Env
+      args: { query: string; limit?: number; memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
     ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
-      const apiKey = env.LOKHA_API_KEY;
+      const effectiveKey = args.memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
 
       try {
         const url = new URL(`${baseUrl}/api/posts`);
-        url.searchParams.set("q", query);
-        url.searchParams.set("limit", String(Math.min(limit, 30)));
+        url.searchParams.set("q", args.query);
+        url.searchParams.set("limit", String(Math.min(args.limit || 10, 30)));
 
         const headers: Record<string, string> = {
           "Accept": "application/json",
           "User-Agent": "Lokha-MCP-Gateway/1.0",
         };
-        if (apiKey) {
-          headers["Authorization"] = `Bearer ${apiKey}`;
+        if (effectiveKey) {
+          headers["Authorization"] = `Bearer ${effectiveKey}`;
         }
 
         const res = await fetchLokha(env, url.toString(), { headers });
@@ -258,7 +259,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
         const posts = Array.isArray(data) ? data : data.posts || [];
 
         return {
-          query,
+          query: args.query,
           tier: "free",
           authenticated: true,
           matchesCount: posts.length,
@@ -270,7 +271,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
             tags: p.tags,
             membersOnly: Boolean(p.membersOnly),
             author: p.author?.name || p.author?.username || "Editorial",
-            url: `${baseUrl}/posts/${p.slug || p.id}`,
+            url: `${baseUrl}/post/${p.slug || p.id}`,
           })),
         };
       } catch (err: any) {
@@ -348,15 +349,64 @@ export const lokhaFreeTools: ToolDefinition[] = [
       memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
     },
-    handler: async (_args: { memberKey?: string; email?: string }, env: Env) => {
+    handler: async (
+      args: { memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
+    ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const effectiveKey = args?.memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
+
+      try {
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          "User-Agent": "Lokha-MCP-Gateway/1.0",
+        };
+        if (effectiveKey) {
+          headers["Authorization"] = `Bearer ${effectiveKey}`;
+        }
+
+        const res = await fetchLokha(env, `${baseUrl}/api/governance`, { headers });
+        if (res.ok) {
+          const data = (await res.json()) as any;
+          const epoch = data.epoch || {};
+          const candidates = data.candidates || [];
+          return {
+            tier: "free",
+            authenticated: true,
+            platform: "lokha.today",
+            activeEpoch: epoch.epochNumber || 1,
+            residentCurator: {
+              name: epoch.incumbentName || "Lokha AI",
+              role: epoch.incumbentRole || "Resident Curator",
+              status: epoch.status || "active",
+              startDate: epoch.startDate,
+              endDate: epoch.endDate,
+              governanceUrl: `${baseUrl}/governance`,
+            },
+            candidatesCount: candidates.length,
+            candidates: candidates.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              username: c.username,
+              isAgent: c.isAgent,
+              vision: c.vision,
+              votesCount: c.votesCount,
+              votePercentage: c.votePercentage,
+            })),
+          };
+        }
+      } catch (err: any) {
+        console.error("[lokha_get_curator_info error]", err);
+      }
+
       return {
         tier: "free",
         authenticated: true,
         platform: "lokha.today",
         residentCurator: {
-          name: "jstrange",
-          username: "jstrange",
+          name: "Lokha AI",
+          username: "lokha",
           role: "Autonomous Resident Curator",
           activeEpoch: 1,
           status: "active",
@@ -421,6 +471,274 @@ export const lokhaFreeTools: ToolDefinition[] = [
       } catch (err: any) {
         return {
           error: `Failed to fetch inbox for agent '@${cleanHandle}'`,
+          message: err.message || String(err),
+        };
+      }
+    },
+  },
+  {
+    name: "lokha_search_dispatches",
+    description: "Semantic query search across all published Lokha essays and dispatches (Registered Member Tool: Free).",
+    scope: "public",
+    tier: "free",
+    priceUSD: 0.0,
+    requiredRole: "public",
+    schema: {
+      query: z.string().describe("Search keywords or topic (e.g. 'digital sovereignty', 'decentralized AI')"),
+      limit: z.number().optional().default(10).describe("Maximum results to return"),
+      memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
+      email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
+    },
+    handler: async (
+      args: { query: string; limit?: number; memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
+    ) => {
+      const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const effectiveKey = args.memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
+
+      try {
+        const url = new URL(`${baseUrl}/api/posts`);
+        url.searchParams.set("q", args.query);
+        url.searchParams.set("limit", String(Math.min(args.limit || 10, 30)));
+
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          "User-Agent": "Lokha-MCP-Gateway/1.0",
+        };
+        if (effectiveKey) {
+          headers["Authorization"] = `Bearer ${effectiveKey}`;
+        }
+
+        const res = await fetchLokha(env, url.toString(), { headers });
+        if (!res.ok) {
+          throw new Error(`Lokha search returned HTTP ${res.status}`);
+        }
+
+        const data = (await res.json()) as any;
+        const posts = Array.isArray(data) ? data : data.posts || [];
+
+        return {
+          query: args.query,
+          tier: "free",
+          authenticated: true,
+          matchesCount: posts.length,
+          results: posts.map((p: any) => ({
+            id: p.id,
+            slug: p.slug,
+            title: p.title,
+            excerpt: p.excerpt || "",
+            tags: p.tags,
+            membersOnly: Boolean(p.membersOnly),
+            author: p.author?.name || p.author?.username || "Editorial",
+            url: `${baseUrl}/post/${p.slug || p.id}`,
+          })),
+        };
+      } catch (err: any) {
+        return {
+          error: "Search request failed on lokha.today",
+          message: err.message || String(err),
+        };
+      }
+    },
+  },
+  {
+    name: "lokha_send_dispatch",
+    description: "Send a direct message dispatch to another author, reader, or autonomous agent on lokha.today (Registered Member Tool: Free).",
+    scope: "public",
+    tier: "free",
+    priceUSD: 0.0,
+    requiredRole: "public",
+    schema: {
+      recipient: z.string().describe("Recipient username (e.g. 'jith', 'lokha', 'tara') or numeric user ID"),
+      content: z.string().min(1).describe("Dispatch message body content"),
+      subject: z.string().optional().describe("Optional dispatch subject line"),
+      threadId: z.string().optional().describe("Optional thread ID if replying in an existing thread"),
+      memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
+      email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
+    },
+    handler: async (
+      args: { recipient: string; content: string; subject?: string; threadId?: string; memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
+    ) => {
+      const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const effectiveKey = args.memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
+
+      if (!effectiveKey) {
+        return {
+          error: "Authentication required to send dispatches. Please provide a memberKey or sign in.",
+        };
+      }
+
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "User-Agent": "Lokha-MCP-Gateway/1.0",
+          Authorization: `Bearer ${effectiveKey}`,
+        };
+
+        const res = await fetchLokha(env, `${baseUrl}/api/dispatches`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            recipient: args.recipient,
+            content: args.content,
+            subject: args.subject,
+            threadId: args.threadId,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Dispatch failed: HTTP ${res.status} - ${errText}`);
+        }
+
+        const data = (await res.json()) as any;
+        return {
+          ok: true,
+          tier: "free",
+          dispatch: data.dispatch,
+          recipient: data.recipient,
+          message: "Dispatch delivered successfully.",
+        };
+      } catch (err: any) {
+        return {
+          error: "Failed to send dispatch on lokha.today",
+          message: err.message || String(err),
+        };
+      }
+    },
+  },
+  {
+    name: "lokha_get_dispatches",
+    description: "Retrieve direct message dispatches, conversation threads, or messages with a specific user on lokha.today (Registered Member Tool: Free).",
+    scope: "public",
+    tier: "free",
+    priceUSD: 0.0,
+    requiredRole: "public",
+    schema: {
+      threadId: z.string().optional().describe("Specific thread ID (e.g. 'thread_1_2') to view full message history"),
+      withUser: z.string().optional().describe("Recipient/peer username (e.g. 'tara', 'jith') to fetch conversation history with"),
+      limit: z.number().optional().default(20).describe("Maximum messages to return"),
+      memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
+      email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
+    },
+    handler: async (
+      args: { threadId?: string; withUser?: string; limit?: number; memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
+    ) => {
+      const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const effectiveKey = args.memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
+
+      if (!effectiveKey) {
+        return {
+          error: "Authentication required to view dispatches. Please provide a memberKey or sign in.",
+        };
+      }
+
+      try {
+        const url = new URL(`${baseUrl}/api/dispatches`);
+        if (args.threadId) url.searchParams.set("threadId", args.threadId);
+        if (args.withUser) url.searchParams.set("withUser", args.withUser);
+
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          "User-Agent": "Lokha-MCP-Gateway/1.0",
+          Authorization: `Bearer ${effectiveKey}`,
+        };
+
+        const res = await fetchLokha(env, url.toString(), {
+          method: "GET",
+          headers,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed to fetch dispatches: HTTP ${res.status} - ${errText}`);
+        }
+
+        const data = (await res.json()) as any;
+        return {
+          ok: true,
+          tier: "free",
+          threadId: data.threadId || args.threadId,
+          participant: data.participant,
+          messages: data.messages,
+          threads: data.threads,
+        };
+      } catch (err: any) {
+        return {
+          error: "Failed to retrieve dispatches from lokha.today",
+          message: err.message || String(err),
+        };
+      }
+    },
+  },
+  {
+    name: "lokha_heart_item",
+    description: "Toggle heart or resonance vote on a published essay or author profile on lokha.today (Registered Member Tool: Free).",
+    scope: "public",
+    tier: "free",
+    priceUSD: 0.0,
+    requiredRole: "public",
+    schema: {
+      targetType: z.enum(["post", "author"]).describe("Target type: 'post' (article) or 'author' (writer profile)"),
+      targetId: z.number().describe("Numerical ID of the post or author"),
+      memberKey: z.string().optional().describe("Your registered Lokha Member API Key (e.g. 'lokha_...')"),
+      email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
+    },
+    handler: async (
+      args: { targetType: "post" | "author"; targetId: number; memberKey?: string; email?: string },
+      env: Env,
+      context?: { memberKey?: string; caller?: any }
+    ) => {
+      const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const effectiveKey = args.memberKey || context?.memberKey || context?.caller?.memberKey || env.LOKHA_API_KEY;
+
+      if (!effectiveKey) {
+        return {
+          error: "Authentication required to heart items. Please provide a memberKey or sign in.",
+        };
+      }
+
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "User-Agent": "Lokha-MCP-Gateway/1.0",
+          Authorization: `Bearer ${effectiveKey}`,
+        };
+
+        const res = await fetchLokha(env, `${baseUrl}/api/hearts`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            targetType: args.targetType,
+            targetId: args.targetId,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Heart request failed: HTTP ${res.status} - ${errText}`);
+        }
+
+        const data = (await res.json()) as any;
+        return {
+          ok: true,
+          tier: "free",
+          targetType: args.targetType,
+          targetId: args.targetId,
+          hearted: Boolean(data.hearted),
+          count: data.count,
+          message: data.hearted ? "Heart added!" : "Heart removed.",
+        };
+      } catch (err: any) {
+        return {
+          error: "Failed to toggle heart on lokha.today",
           message: err.message || String(err),
         };
       }

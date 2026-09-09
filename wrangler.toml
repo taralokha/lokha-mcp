@@ -2,7 +2,6 @@ name = "personal-mcp-gateway"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
-
 routes = [
   { pattern = "mcp.lokha.today", custom_domain = true }
 ]

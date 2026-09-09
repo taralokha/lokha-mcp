@@ -76,13 +76,13 @@ export const lokhaPaidTools: ToolDefinition[] = [
       email: z.string().optional().describe("Or your registered email on lokha.today to auto-authenticate"),
     },
     handler: async (
-      { slugOrId }: { slugOrId: string; memberKey?: string; email?: string },
+      args: { slugOrId: string; memberKey?: string; email?: string },
       env: Env,
       context?: { isPaid?: boolean; payer?: string; memberKey?: string; caller?: any }
     ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
-      const apiKey = env.LOKHA_API_KEY;
       const caller = context?.caller;
+      const effectiveKey = args.memberKey || context?.memberKey || caller?.memberKey || env.LOKHA_API_KEY;
       const isExempt = !context?.isPaid && (caller?.isOwner || caller?.isCurator || caller?.isPaid || caller?.isAuthor);
 
       try {
@@ -90,16 +90,17 @@ export const lokhaPaidTools: ToolDefinition[] = [
           "Accept": "application/json",
           "User-Agent": "Lokha-MCP-Gateway/1.0",
         };
-        if (apiKey) {
-          headers["Authorization"] = `Bearer ${apiKey}`;
+        if (effectiveKey) {
+          headers["Authorization"] = `Bearer ${effectiveKey}`;
         }
 
-        const res = await fetchLokha(env, `${baseUrl}/api/posts/${slugOrId}`, { headers });
+        const res = await fetchLokha(env, `${baseUrl}/api/posts/${args.slugOrId}`, { headers });
         if (!res.ok) {
           throw new Error(`Failed to fetch story: HTTP ${res.status}`);
         }
 
-        const post = (await res.json()) as any;
+        const data = (await res.json()) as any;
+        const post = data.post || data;
         return {
           tier: "paid",
           accessStatus: isExempt ? "granted_via_role_membership" : "unlocked_via_x402_micropayment",
@@ -115,11 +116,12 @@ export const lokhaPaidTools: ToolDefinition[] = [
             publishedAt: post.publishedAt,
             membersOnly: post.membersOnly,
             content: post.content || post.body || "Story content available.",
+            url: `${baseUrl}/post/${post.slug || post.id}`,
           },
         };
       } catch (err: any) {
         return {
-          error: `Error unlocking story '${slugOrId}'`,
+          error: `Error unlocking story '${args.slugOrId}'`,
           message: err.message || String(err),
         };
       }
@@ -224,7 +226,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
             title,
             status: "draft",
             editorStudioUrl: `${baseUrl}/dashboard`,
-            previewUrl: result.slug ? `${baseUrl}/posts/${result.slug}` : undefined,
+            previewUrl: result.slug ? `${baseUrl}/post/${result.slug}` : undefined,
           },
           message: "Your story draft has been submitted to Lokha Writer Studio! Resident Curators and Editors will review it.",
         };
@@ -343,7 +345,7 @@ export const lokhaPaidTools: ToolDefinition[] = [
             title,
             status,
             coverImage: result.post?.coverImage || coverImage,
-            url: result.post?.url || (result.slug ? `${baseUrl}/posts/${result.slug}` : undefined),
+            url: result.post?.url || (result.slug ? `${baseUrl}/post/${result.slug}` : undefined),
             editorStudioUrl: `${baseUrl}/dashboard`,
           },
           socialBroadcast: result.socialBroadcast || null,
