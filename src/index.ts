@@ -255,6 +255,29 @@ export default {
             }
           );
         }
+
+        // Asynchronously sync verified x402 micropayment to Lokha's unified ledger
+        const platformUrl = env.LOKHA_API_URL || "https://stage.lokha.today";
+        fetch(`${platformUrl}/api/payments/record`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: "x402",
+            amount: String(tool.priceUSD || "0.05"),
+            currency: "USDC",
+            transactionType: "micropayment",
+            referenceId: reqSpec.nonce,
+            payerIdentifier: paymentCheck.payer || "autonomous-agent",
+            description: `x402 payment for ${tool.name}`,
+            metadata: {
+              toolName: tool.name,
+              network: reqSpec.network,
+              asset: reqSpec.asset,
+              payer: paymentCheck.payer,
+            },
+            agentKey: caller.memberKey,
+          }),
+        }).catch((err) => console.error("[MCP] Payment sync error:", err));
       }
 
       // 5d. Execute Tool Handler
