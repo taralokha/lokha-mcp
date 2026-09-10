@@ -387,6 +387,10 @@ export function checkToolAccess(
 
   // If tool requires registered membership
   if (tool.requiredRole === "member" && caller.role === "anonymous") {
+    // Paid tools can be unlocked via x402 micropayments by autonomous agents
+    if (tool.tier === "paid") {
+      return { allowed: true };
+    }
     return {
       allowed: false,
       reason: `Registration Required: You must be registered on lokha.today to execute '${tool.name}'. Use 'lokha_register_or_login' to get started.`,
