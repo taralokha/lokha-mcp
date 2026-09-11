@@ -25,10 +25,10 @@ export function createPaymentRequirement(
   priceUSD: number,
   env: Env
 ): X402PaymentRequirement {
-  const network = env.X402_NETWORK || "eip155:84532";
+  const network = env.X402_NETWORK || "eip155:8453";
   const isMainnet = network === "eip155:8453";
   const tokenAddress = isMainnet ? BASE_MAINNET_USDC : BASE_SEPOLIA_USDC;
-  const recipient = env.PAYMENT_RECIPIENT_ADDRESS || "0x644627d3E63e1fD567634f19e7195f269a941E55";
+  const recipient = env.PAYMENT_RECIPIENT_ADDRESS || "0x3A3Ef81a74B222EEa9099D544665DF7F4b5B6c61";
   const facilitator = env.X402_FACILITATOR_URL || "https://x402.org/facilitator";
 
   // Convert USD to 6 decimal atomic units (e.g. $0.05 -> 50000)

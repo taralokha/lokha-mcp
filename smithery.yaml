@@ -1,0 +1,5 @@
+# Smithery configuration for Lokha MCP Gateway
+startCommand:
+  type: sse
+  config:
+    url: https://mcp.lokha.today/sse

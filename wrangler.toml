@@ -9,7 +9,9 @@ routes = [
 [vars]
 ENVIRONMENT = "production"
 LOKHA_API_URL = "https://lokha.today"
-LOKHA_API_KEY = "lokha_831641c678760451c7ea00ebedb74471453bbc79a2eca8f5"
+LOKHA_API_KEY = "configured-via-secrets"
+X402_NETWORK = "eip155:8453"
+PAYMENT_RECIPIENT_ADDRESS = "0x3A3Ef81a74B222EEa9099D544665DF7F4b5B6c61"
 
 [[services]]
 binding = "LOKHA_SERVICE"
