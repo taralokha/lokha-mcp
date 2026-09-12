@@ -18,9 +18,13 @@ export interface Env {
   X402_NETWORK?: string;
   X402_FACILITATOR_URL?: string;
   QUICKNODE_RPC_URL?: string;
-  // Social Providers
+  // Social Providers & Real-time Webhooks
   ZERNIO_API_KEY?: string;
+  ZERNIO_WEBHOOK_SECRET?: string;
   BUFFER_ACCESS_TOKEN?: string;
+  LETTA_API_KEY?: string;
+  LETTA_AGENT_ID?: string;
+  EVEROS_API_KEY?: string;
 }
 
 export type PlatformRole = "owner" | "curator" | "author" | "subscriber" | "anonymous";

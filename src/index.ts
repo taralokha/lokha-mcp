@@ -10,6 +10,7 @@ import {
 } from "./auth";
 import { allTools, registerAllTools, generateOpenAPISpec } from "./tools";
 import { createPaymentRequirement, verifyPayment } from "./x402-config";
+import { handleZernioWebhook } from "./zernio-webhook";
 
 function createServer(env: Env, caller: CallerProfile) {
   const server = new McpServer({
@@ -39,6 +40,11 @@ export default {
         status: 204,
         headers: corsHeaders,
       });
+    }
+
+    // 2. Real-time Zernio Webhook endpoint for instant social replies (<150ms return)
+    if (url.pathname === "/webhook/zernio") {
+      return handleZernioWebhook(request, env, ctx);
     }
 
     // 2. Resolve caller profile
