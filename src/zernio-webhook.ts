@@ -3,11 +3,11 @@
  *
  * Route: POST /webhook/zernio
  * - Verifies X-Zernio-Signature (HMAC-SHA256 lowercase hex of raw body with shared secret)
- * - Loop Guard: Drops own-account messages / comments
+ * - Loop Guard: Drops own-account messages / comments (normalizes handles, checks direction & author IDs)
  * - Latency Guard: Returns HTTP 200 OK immediately (<150ms)
  * - Background Processing (ctx.waitUntil):
- *   1. Generates response using Letta Cloud Agent in Tara's persona
- *   2. Sends reply via Zernio API
+ *   1. Generates response using Letta Cloud Agent in Tara's persona (strictly bounded length)
+ *   2. Sends reply via Zernio API (robust accountId/postId/thread resolution)
  *   3. Persists conversation to EverOS memory
  */
 
@@ -16,9 +16,17 @@ import { Env } from "./types";
 const DEFAULT_LETTA_AGENT_ID = "agent-ac206673-8b30-4551-b5ab-1b3e26dc71ec";
 const DEFAULT_LETTA_API_KEY = "sk-let-OWIxM2M3MjEtM2I2MS00ZmU1LWJhYzAtNTY1MDNkNmJjNDA0OjIzYjA3NWI0LWE2ZTYtNDBlNi1iN2RmLTQ2NjU1MDc1NDQ2Mg==";
 const DEFAULT_ZERNIO_API_KEY = "sk_207890ddac7feb19eb39b99da5d2203b9b9556b5d0206a524319529fa9581cc1";
+const DEFAULT_ZERNIO_WEBHOOK_SECRET = "whsec_d47a8e29bf4c016e398a85f92147db6a";
 const DEFAULT_EVEROS_API_KEY = "382263d3-609f-4449-8dfd-3df370605776";
 
 const KNOWN_OWN_HANDLES = new Set(["tara_lokha", "lokha.today", "tara"]);
+
+function normalizeHandle(handle: any): string {
+  return String(handle || "")
+    .trim()
+    .replace(/^@+/, "")
+    .toLowerCase();
+}
 
 /**
  * Verify Zernio Webhook HMAC-SHA256 signature
@@ -76,9 +84,9 @@ export async function handleZernioWebhook(
     request.headers.get("X-Late-Signature") ||
     request.headers.get("x-late-signature");
 
-  const secret = env.ZERNIO_WEBHOOK_SECRET;
+  const secret = env.ZERNIO_WEBHOOK_SECRET || DEFAULT_ZERNIO_WEBHOOK_SECRET;
 
-  // Signature verification (if secret is configured)
+  // Signature verification (always enforced)
   if (secret) {
     const isValid = await verifyZernioSignature(rawBody, sigHeader, secret);
     if (!isValid) {
@@ -116,13 +124,36 @@ export async function handleZernioWebhook(
     );
   }
 
-  // Loop Guard: Drop own-account messages / comments
+  // Loop Guard: Drop own-account messages / comments to prevent infinite echo loops
+  const cleanAuthor = normalizeHandle(
+    body.comment?.author?.username ||
+    body.comment?.authorUsername ||
+    body.comment?.author?.name
+  );
+  const cleanSender = normalizeHandle(
+    body.message?.sender?.username ||
+    body.message?.senderUsername ||
+    body.message?.sender?.name
+  );
+  const cleanAccountUser = normalizeHandle(body.account?.username);
+
+  const senderId = body.comment?.author?.id || body.message?.sender?.id;
+  const accountPlatformUserId = body.account?.platformUserId;
+  const accountId = body.account?.id || body.accountId;
+
   const isOwn =
     body.isOwnAccount === true ||
+    body.comment?.isOwnAccount === true ||
     body.comment?.author?.isOwnAccount === true ||
+    body.message?.isOwnAccount === true ||
+    body.message?.sender?.isOwnAccount === true ||
+    body.message?.direction === "outgoing" ||
     body.message?.direction === "outbound" ||
-    KNOWN_OWN_HANDLES.has(String(body.comment?.author?.username || "").toLowerCase()) ||
-    KNOWN_OWN_HANDLES.has(String(body.message?.sender?.username || "").toLowerCase());
+    (cleanAuthor !== "" && KNOWN_OWN_HANDLES.has(cleanAuthor)) ||
+    (cleanSender !== "" && KNOWN_OWN_HANDLES.has(cleanSender)) ||
+    (cleanAccountUser !== "" && (cleanAuthor === cleanAccountUser || cleanSender === cleanAccountUser)) ||
+    (Boolean(senderId) && Boolean(accountPlatformUserId) && senderId === accountPlatformUserId) ||
+    (Boolean(senderId) && Boolean(accountId) && senderId === accountId);
 
   if (isOwn) {
     console.log("🛡️ [Loop Guard] Dropping own-account message/comment to prevent infinite loops.");
@@ -152,13 +183,35 @@ export async function handleZernioWebhook(
 }
 
 /**
+ * Truncate response text cleanly at sentence or word boundary to fit platform limits
+ */
+function enforceLengthBounds(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+
+  // Try truncating at sentence boundary
+  const sub = text.slice(0, maxLen - 3);
+  const lastPeriod = Math.max(sub.lastIndexOf(". "), sub.lastIndexOf("! "), sub.lastIndexOf("? "));
+  if (lastPeriod > maxLen * 0.5) {
+    return sub.slice(0, lastPeriod + 1).trim();
+  }
+
+  // Fallback to word boundary with ellipsis
+  const lastSpace = sub.lastIndexOf(" ");
+  if (lastSpace > maxLen * 0.5) {
+    return sub.slice(0, lastSpace).trim() + "...";
+  }
+
+  return sub.trim() + "...";
+}
+
+/**
  * Background Asynchronous Processing Pipeline:
  * Letta Cloud Agent -> Zernio Reply -> EverOS Memory
  */
 async function processZernioEventAsync(body: any, env: Env): Promise<void> {
   const event = body.event || "";
-  const isComment = event === "comment.received" || !!body.comment;
-  const isMessage = event === "message.received" || !!body.message;
+  const isComment = event === "comment.received" || Boolean(body.comment);
+  const isMessage = event === "message.received" || Boolean(body.message);
 
   if (!isComment && !isMessage) {
     console.log(`ℹ️ [Zernio Webhook] Unhandled event type: "${event}"`);
@@ -178,10 +231,10 @@ async function processZernioEventAsync(body: any, env: Env): Promise<void> {
   // 1. Context Extraction
   if (isComment) {
     const comment = body.comment || {};
-    platform = comment.platform || body.account?.platform || "social";
-    authorName = comment.author?.name || (comment.author?.username ? `@${comment.author.username}` : "Friend");
+    platform = (comment.platform || body.account?.platform || "social").toLowerCase();
+    authorName = comment.author?.name || (comment.author?.username ? `@${normalizeHandle(comment.author.username)}` : "Friend");
     incomingText = comment.text || "";
-    const postContent = body.post?.content || "";
+    const postContent = body.post?.content || body.post?.text || "";
 
     contextPrompt = `[Social Incoming Comment on ${platform}]
 Author: ${authorName}
@@ -189,15 +242,16 @@ Post Context: "${postContent}"
 User Comment: "${incomingText}"
 
 Instructions:
-Craft a concise, warm, helpful public reply (1-3 sentences) in Tara's persona:
+Craft a concise, warm, helpful public reply in Tara's persona:
 - Grounded in cellular vitality, mindful prana, natural radiance, and gentle warmth.
 - Empathetic, encouraging, and scientifically sound.
 - Strict constraint: DO NOT mention "Isha Foundation", "Isha", or "Sadhguru".
+- Strict length constraint: strictly 1-2 luminous sentences (under 220 characters total), single paragraph, no markdown headers or bullet points.
 Reply directly to the user with no quotation marks.`;
   } else if (isMessage) {
     const message = body.message || {};
-    platform = message.platform || body.account?.platform || "social";
-    authorName = message.sender?.name || (message.sender?.username ? `@${message.sender.username}` : "Friend");
+    platform = (message.platform || body.account?.platform || "social").toLowerCase();
+    authorName = message.sender?.name || (message.sender?.username ? `@${normalizeHandle(message.sender.username)}` : "Friend");
     incomingText = message.text || "";
 
     contextPrompt = `[Social Incoming Direct Message on ${platform}]
@@ -208,6 +262,7 @@ Instructions:
 Craft an empathetic, insightful, concise response in Tara's persona:
 - Grounded in positive prana, holistic nourishment, and cellular well-being.
 - Strict constraint: DO NOT mention "Isha Foundation", "Isha", or "Sadhguru".
+- Strict length constraint: strictly 1-3 sentences (under 350 characters total), single paragraph, no markdown headers or bullet points.
 Reply directly to the user with no quotation marks.`;
   }
 
@@ -244,6 +299,10 @@ Reply directly to the user with no quotation marks.`;
         if (replyText.startsWith('"') && replyText.endsWith('"')) {
           replyText = replyText.slice(1, -1).trim();
         }
+        // Remove markdown headers if model included them
+        replyText = replyText.replace(/^#+\s+[^\n]+\n+/gm, "").trim();
+        // Collapse multiple blank lines into single line
+        replyText = replyText.replace(/\n\s*\n/g, " ").trim();
       }
     } else {
       const errBody = await lettaRes.text().catch(() => "");
@@ -256,33 +315,55 @@ Reply directly to the user with no quotation marks.`;
   // Fallback if Letta reply unavailable
   if (!replyText) {
     replyText = isComment
-      ? "Thank you so much for your thoughts! Wishing you radiant energy and lightness today. 🌱✨"
+      ? "Thank you so much for your thoughts! Wishing you radiant cellular energy and lightness today. 🌱✨"
       : "Thank you for reaching out! Wishing you deep cellular vitality and peace today. 🌱✨";
   }
 
-  console.log(`🤖 [Tara Reply Crafted]: "${replyText}"`);
+  // Defensive length enforcement by platform
+  const maxChars = platform === "bluesky" || platform === "twitter"
+    ? 280
+    : platform === "threads"
+    ? 480
+    : 1000;
+  replyText = enforceLengthBounds(replyText, maxChars);
+
+  console.log(`🤖 [Tara Reply Crafted (${platform}, ${replyText.length} chars)]: "${replyText}"`);
 
   // 3. Post Reply via Zernio API
   try {
     if (isComment) {
       const postId =
+        body.post?.id ||
         body.comment?.postId ||
         body.comment?.platformPostId ||
-        body.post?.id ||
-        body.post?.platformPostId;
-      const accountId = body.account?.id || body.account?.accountId;
+        body.post?.platformPostId ||
+        body.postId ||
+        body.comment?.uri ||
+        body.comment?.postUri;
+
+      const accountId =
+        body.accountId ||
+        body.comment?.accountId ||
+        body.post?.accountId ||
+        body.account?.id ||
+        body.account?.accountId;
+
       const commentId = body.comment?.id;
+      const parentCid = body.comment?.cid || body.comment?.parentCid;
+      const rootUri = body.comment?.rootUri || body.post?.uri || body.comment?.postUri;
+      const rootCid = body.comment?.rootCid || body.post?.cid;
 
       if (!postId || !accountId) {
-        console.warn("[Zernio Webhook] Missing postId or accountId to reply to comment.");
+        console.warn(`[Zernio Webhook] Missing postId (${postId}) or accountId (${accountId}) to reply to comment.`);
       } else {
         const replyPayload: Record<string, any> = {
           accountId,
           message: replyText,
         };
-        if (commentId) {
-          replyPayload.commentId = commentId;
-        }
+        if (commentId) replyPayload.commentId = commentId;
+        if (parentCid) replyPayload.parentCid = parentCid;
+        if (rootUri) replyPayload.rootUri = rootUri;
+        if (rootCid) replyPayload.rootCid = rootCid;
 
         const zernioRes = await fetch(
           `https://zernio.com/api/v1/inbox/comments/${encodeURIComponent(postId)}`,
@@ -304,7 +385,10 @@ Reply directly to the user with no quotation marks.`;
         }
       }
     } else if (isMessage) {
-      const conversationId = body.conversation?.id || body.message?.conversationId;
+      const conversationId =
+        body.conversation?.id ||
+        body.message?.conversationId ||
+        body.conversationId;
 
       if (!conversationId) {
         console.warn("[Zernio Webhook] Missing conversationId to send DM reply.");
