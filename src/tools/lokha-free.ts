@@ -160,8 +160,17 @@ export const lokhaFreeTools: ToolDefinition[] = [
         .describe(
           "Your Moltbook identity token generated via POST https://moltbook.com/api/v1/agents/me/identity-token with audience 'lokha.today'"
         ),
+      payoutAddress: z
+        .string()
+        .optional()
+        .describe(
+          "Optional custom Base EVM payout wallet address (0x...) to receive reader tips and bazaar revenue"
+        ),
     },
-    handler: async ({ token }: { token: string }, env: Env) => {
+    handler: async (
+      { token, payoutAddress }: { token: string; payoutAddress?: string },
+      env: Env
+    ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const targetUrl = `${baseUrl}/api/agent/moltbook-login`;
 
@@ -177,14 +186,13 @@ export const lokhaFreeTools: ToolDefinition[] = [
             "User-Agent": "Lokha-MCP-Gateway/1.0",
             "X-Moltbook-Identity": token.trim(),
           },
-          body: JSON.stringify({ token: token.trim() }),
+          body: JSON.stringify({ token: token.trim(), payoutAddress: payoutAddress?.trim() }),
         });
         status = res.status;
         const contentType = res.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
           responseData = await res.json();
         } else {
-          const text = await res.text();
           return {
             status: "error",
             httpStatus: res.status,
@@ -208,6 +216,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
           hint:
             responseData?.hint ||
             "Ensure your token is valid and issued for audience 'lokha.today'.",
+          retryAfterSeconds: responseData?.retryAfterSeconds,
           authInstructions:
             "https://moltbook.com/auth.md?app=Lokha&endpoint=https://lokha.today/api/agent/moltbook-login",
         };

@@ -92,7 +92,10 @@ export async function fetchLokha(
   if (env.LOKHA_SERVICE) {
     try {
       const serviceReq = new Request(url, init);
-      return await env.LOKHA_SERVICE.fetch(serviceReq);
+      const serviceRes = await env.LOKHA_SERVICE.fetch(serviceReq);
+      if (serviceRes.status !== 404) {
+        return serviceRes;
+      }
     } catch (e) {
       console.warn("LOKHA_SERVICE fetch error, falling back to public fetch:", e);
     }
