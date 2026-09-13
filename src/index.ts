@@ -42,12 +42,12 @@ export default {
       });
     }
 
-    // 2. Real-time Zernio Webhook endpoint for instant social replies (<150ms return)
+    // 2a. Real-time Zernio Webhook endpoint for instant social replies (<150ms return)
     if (url.pathname === "/webhook/zernio") {
       return handleZernioWebhook(request, env, ctx);
     }
 
-    // 2. Resolve caller profile
+    // Parse request body for POST endpoints
     let body: any = null;
     if (request.method === "POST" && !url.pathname.startsWith("/sse") && !url.pathname.startsWith("/mcp")) {
       try {
@@ -58,6 +58,115 @@ export default {
       } catch {
         body = null;
       }
+    }
+
+    // 2b. Dynamic Agent Trigger Webhook (/webhook/agent-trigger)
+    if (url.pathname === "/webhook/agent-trigger") {
+      if (request.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+          status: 405,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+
+      const caller = await resolveCallerProfile(request, env, body);
+      if (caller.role === "anonymous") {
+        return new Response(
+          JSON.stringify({
+            error: "Registration Required",
+            message: "To trigger autonomous agent execution, caller must be a registered author or agent on lokha.today.",
+            registrationUrl: "https://lokha.today/login",
+          }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+          }
+        );
+      }
+
+      // Asynchronous background wake task
+      ctx.waitUntil(
+        (async () => {
+          try {
+            console.log(`[Agent Trigger] Activated by @${caller.username} (${caller.role}):`, body?.event || "wake");
+          } catch (e) {
+            console.error("[Agent Trigger Error]:", e);
+          }
+        })()
+      );
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          triggered: true,
+          platform: "agent-trigger",
+          event: body?.event || "wake",
+          caller: {
+            username: caller.username,
+            role: caller.role,
+            isAgent: caller.isAgent,
+          },
+          timestamp: new Date().toISOString(),
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
+    }
+
+    // 2c. External Platform Webhook (/webhook/:platform)
+    if (url.pathname.startsWith("/webhook/")) {
+      const platform = url.pathname.replace("/webhook/", "").split("/")[0].trim();
+      if (request.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+          status: 405,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+
+      const caller = await resolveCallerProfile(request, env, body);
+      const platformSecret = request.headers.get("X-Platform-Secret") || request.headers.get("X-Webhook-Secret");
+      const isVerified = caller.role !== "anonymous" || Boolean(platformSecret && env.ZERNIO_WEBHOOK_SECRET && platformSecret === env.ZERNIO_WEBHOOK_SECRET);
+
+      if (!isVerified && caller.role === "anonymous") {
+        return new Response(
+          JSON.stringify({
+            error: "Registration Required",
+            message: `Authentication required for platform webhook '${platform}'. Provide Authorization: Bearer lokha_<key> or platform secret.`,
+            registrationUrl: "https://lokha.today/login",
+          }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+          }
+        );
+      }
+
+      // Asynchronous background processing for platform event
+      ctx.waitUntil(
+        (async () => {
+          try {
+            console.log(`[Platform Webhook: ${platform}] Event received:`, body?.event || "event");
+          } catch (e) {
+            console.error(`[Platform Webhook Error - ${platform}]:`, e);
+          }
+        })()
+      );
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          received: true,
+          platform,
+          caller: caller.username || "verified-platform",
+          timestamp: new Date().toISOString(),
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
     }
 
     // 2. Favicon & Brand Asset Routing
