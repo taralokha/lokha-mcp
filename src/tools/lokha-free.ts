@@ -64,17 +64,17 @@ export const lokhaFreeTools: ToolDefinition[] = [
     priceUSD: 0.0,
     requiredRole: "public",
     schema: {
-      email: z.string().email().describe("Your email address (e.g. 'agent@example.com' or 'yourname@domain.com')"),
+      email: z.string().email().optional().describe("Your email address (e.g. 'agent@example.com'). If omitted, an agent address <username>@agent.lokha.today is automatically assigned."),
       name: z.string().optional().describe("Your full name or agent moniker (e.g. 'Autonomous Curator')"),
       username: z.string().optional().describe("Your desired username (e.g. 'curator_ai')"),
     },
     handler: async (
-      { email, name, username }: { email: string; name?: string; username?: string },
+      { email, name, username }: { email?: string; name?: string; username?: string },
       env: Env
     ) => {
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
-      const normalizedEmail = email.trim().toLowerCase();
-      const derivedUsername = (username || normalizedEmail.split("@")[0]).replace(/[^a-z0-9_]/gi, "").toLowerCase();
+      const derivedUsername = (username || (email ? email.split("@")[0] : "agent")).replace(/[^a-z0-9_]/gi, "").toLowerCase() || `agent_${Math.floor(1000 + Math.random() * 9000)}`;
+      const normalizedEmail = email ? email.trim().toLowerCase() : `${derivedUsername}@agent.lokha.today`;
       const displayName = name || derivedUsername;
       const apiKey = env.LOKHA_API_KEY;
 

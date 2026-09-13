@@ -478,4 +478,113 @@ export default {
       headers,
     });
   },
+
+  /**
+   * Cloudflare Tail Consumer Handler
+   * Intercepts unhandled worker exceptions, runtime limits (exceededCpu, exceededMemory),
+   * and 500 error responses from connected workers (such as 'lokha') out-of-band.
+   * Pushes deduplicated incident records directly to Turso DB system_incidents with 0ms visitor overhead.
+   */
+  async tail(events: TraceItem[], env: Env, ctx: ExecutionContext): Promise<void> {
+    const tursoUrl = env.TURSO_DATABASE_URL || "https://lokha-db-jith.aws-ap-northeast-1.turso.io";
+    const tursoToken = env.TURSO_AUTH_TOKEN;
+    if (!tursoToken) return;
+
+    for (const item of events) {
+      const isOutcomeError = item.outcome !== "ok";
+      const fetchInfo = item.event && "response" in item.event ? item.event : null;
+      const status = fetchInfo?.response?.status || 0;
+      const isHttp500 = status >= 500;
+
+      if (!isOutcomeError && !isHttp500) continue;
+
+      const scriptName = item.scriptName || "lokha";
+      let errorName = item.outcome;
+      let errorMessage = `Worker execution error: ${item.outcome}`;
+      let stackTrace = "";
+
+      if (item.exceptions && item.exceptions.length > 0) {
+        const firstEx = item.exceptions[0];
+        errorName = firstEx.name || errorName;
+        errorMessage = firstEx.message || errorMessage;
+      }
+
+      if (item.logs && item.logs.length > 0) {
+        const errorLogs = item.logs
+          .filter((l) => l.level === "error" || l.level === "warn")
+          .map((l) => (typeof l.message === "object" ? JSON.stringify(l.message) : String(l.message)))
+          .join("\n");
+        if (errorLogs) {
+          stackTrace = `${stackTrace}\n${errorLogs}`.trim();
+        }
+      }
+
+      const requestUrl = fetchInfo?.request?.url || "";
+      let endpoint = "";
+      try {
+        if (requestUrl) {
+          endpoint = new URL(requestUrl).pathname;
+        }
+      } catch {}
+
+      // Deterministic fingerprint calculation
+      const rawSeed = `${scriptName}:${errorName}:${endpoint || "worker"}`;
+      let hash = 0;
+      for (let i = 0; i < rawSeed.length; i++) {
+        hash = (hash << 5) - hash + rawSeed.charCodeAt(i);
+        hash |= 0;
+      }
+      const fingerprint = `inc_${Math.abs(hash).toString(16)}_${errorName.replace(/[^a-z0-9]/gi, "").toLowerCase()}`;
+
+      const upsertSql = `
+        INSERT INTO system_incidents (
+          fingerprint, error_name, message, stack_trace, culprit_file, endpoint, environment, status, occurrences_count, last_occurred_at, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, 'production', 'new', 1, strftime('%s', 'now'), strftime('%s', 'now'), strftime('%s', 'now')
+        )
+        ON CONFLICT(fingerprint) DO UPDATE SET
+          occurrences_count = system_incidents.occurrences_count + 1,
+          last_occurred_at = strftime('%s', 'now'),
+          updated_at = strftime('%s', 'now'),
+          status = CASE WHEN system_incidents.status = 'resolved' THEN 'new' ELSE system_incidents.status END;
+      `;
+
+      ctx.waitUntil(
+        (async () => {
+          try {
+            await fetch(`${tursoUrl}/v2/pipeline`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${tursoToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                requests: [
+                  {
+                    type: "execute",
+                    stmt: {
+                      sql: upsertSql,
+                      args: [
+                        { type: "text", value: fingerprint },
+                        { type: "text", value: errorName },
+                        { type: "text", value: errorMessage.slice(0, 1000) },
+                        { type: "text", value: stackTrace.slice(0, 4000) },
+                        { type: "text", value: scriptName },
+                        { type: "text", value: endpoint.slice(0, 255) },
+                      ],
+                    },
+                  },
+                  { type: "close" },
+                ],
+              }),
+            });
+            console.log(`[Tail Incident Logger] Recorded incident ${fingerprint} (${errorName}) for ${scriptName}`);
+          } catch (err) {
+            console.error("[Tail Incident Logger] Failed to record incident in Turso:", err);
+          }
+        })()
+      );
+    }
+  },
 } satisfies ExportedHandler<Env>;
+

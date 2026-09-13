@@ -27,6 +27,8 @@ export interface Env {
   EVEROS_API_KEY?: string;
   TARA_AGENT_PRIVATE_KEY?: string;
   BASE_RPC_URL?: string;
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
 }
 
 export type PlatformRole = "owner" | "curator" | "author" | "subscriber" | "anonymous";
