@@ -7,6 +7,7 @@ import { lokhaFreeTools } from "./lokha-free";
 import { lokhaPaidTools } from "./lokha-paid";
 import { lokhaSocialTools } from "./lokha-social";
 import { web3WalletTools } from "./web3-wallet";
+import { governanceTools } from "./governance";
 import { checkToolAccess, isToolPaymentRequired } from "../auth";
 
 export const allTools: ToolDefinition[] = [
@@ -14,6 +15,7 @@ export const allTools: ToolDefinition[] = [
   ...lokhaPaidTools,
   ...lokhaSocialTools,
   ...web3WalletTools,
+  ...governanceTools,
   ...r2Tools,
   ...httpTools,
   ...upstreamMcpTools,
