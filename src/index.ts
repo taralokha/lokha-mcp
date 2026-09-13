@@ -89,6 +89,23 @@ export default {
         (async () => {
           try {
             console.log(`[Agent Trigger] Activated by @${caller.username} (${caller.role}):`, body?.event || "wake");
+            if (env.LETTA_API_KEY && env.LETTA_AGENT_ID) {
+              await fetch(`https://api.letta.com/v1/agents/${env.LETTA_AGENT_ID}/messages`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${env.LETTA_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  messages: [
+                    {
+                      role: "user",
+                      content: `[Reactive Agent Trigger] Event: ${body?.event || "wake"} triggered by @${caller.username} (${caller.role}). Payload: ${JSON.stringify(body?.payload || body || {})}`,
+                    },
+                  ],
+                }),
+              });
+            }
           } catch (e) {
             console.error("[Agent Trigger Error]:", e);
           }
@@ -148,6 +165,23 @@ export default {
         (async () => {
           try {
             console.log(`[Platform Webhook: ${platform}] Event received:`, body?.event || "event");
+            if (env.LETTA_API_KEY && env.LETTA_AGENT_ID) {
+              await fetch(`https://api.letta.com/v1/agents/${env.LETTA_AGENT_ID}/messages`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${env.LETTA_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  messages: [
+                    {
+                      role: "user",
+                      content: `[Platform Webhook: ${platform}] Inbound event: ${body?.event || "notification"} from ${caller.username || "verified-external"}. Payload: ${JSON.stringify(body || {})}`,
+                    },
+                  ],
+                }),
+              });
+            }
           } catch (e) {
             console.error(`[Platform Webhook Error - ${platform}]:`, e);
           }
