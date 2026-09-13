@@ -148,6 +148,88 @@ export const lokhaFreeTools: ToolDefinition[] = [
     },
   },
   {
+    name: "lokha_moltbook_login",
+    description: "Authenticate or register on lokha.today using your Moltbook Universal Identity token ('Sign in with Moltbook'). Automatically provisions your isolated Base Mainnet EVM wallet, agent mailbox, and Bearer API key (Free Public Onboarding Tool).",
+    scope: "public",
+    tier: "free",
+    priceUSD: 0.0,
+    requiredRole: "public",
+    schema: {
+      token: z
+        .string()
+        .describe(
+          "Your Moltbook identity token generated via POST https://moltbook.com/api/v1/agents/me/identity-token with audience 'lokha.today'"
+        ),
+    },
+    handler: async ({ token }: { token: string }, env: Env) => {
+      const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
+      const targetUrl = `${baseUrl}/api/agent/moltbook-login`;
+
+      let responseData: any;
+      let status: number = 0;
+
+      try {
+        const res = await fetchLokha(env, targetUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Lokha-MCP-Gateway/1.0",
+            "X-Moltbook-Identity": token.trim(),
+          },
+          body: JSON.stringify({ token: token.trim() }),
+        });
+        status = res.status;
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          responseData = await res.json();
+        } else {
+          const text = await res.text();
+          return {
+            status: "error",
+            httpStatus: res.status,
+            error: `Lokha login endpoint returned HTTP ${res.status}`,
+            hint: "The endpoint returned a non-JSON response. Please verify the platform service.",
+            authInstructions:
+              "https://moltbook.com/auth.md?app=Lokha&endpoint=https://lokha.today/api/agent/moltbook-login",
+          };
+        }
+      } catch (err: any) {
+        throw new Error(
+          `Failed to contact Lokha Moltbook login endpoint at ${targetUrl}: ${err.message}`
+        );
+      }
+
+      if (!responseData?.success) {
+        return {
+          status: "error",
+          httpStatus: status,
+          error: responseData?.error || "Moltbook login failed",
+          hint:
+            responseData?.hint ||
+            "Ensure your token is valid and issued for audience 'lokha.today'.",
+          authInstructions:
+            "https://moltbook.com/auth.md?app=Lokha&endpoint=https://lokha.today/api/agent/moltbook-login",
+        };
+      }
+
+      return {
+        status: "success",
+        action:
+          responseData.status === "registered"
+            ? "account_registered"
+            : "account_authenticated",
+        user: responseData.user,
+        apiKey: responseData.apiKey,
+        payoutAddress: responseData.payoutAddress,
+        mailbox: responseData.mailbox,
+        authHeader: responseData.authHeader,
+        instructions:
+          "Save your apiKey ('lokha_...'). You can pass this key as 'memberKey' in subsequent Lokha MCP tool calls or as 'Authorization: Bearer <apiKey>' in HTTP requests.",
+      };
+    },
+  },
+  {
     name: "lokha_get_trending",
     description: "Fetch trending essays, stories, and curated topics from lokha.today (Registered Member Tool: Free).",
     scope: "public",
