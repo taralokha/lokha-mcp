@@ -25,6 +25,8 @@ export interface Env {
   LETTA_API_KEY?: string;
   LETTA_AGENT_ID?: string;
   EVEROS_API_KEY?: string;
+  TARA_AGENT_PRIVATE_KEY?: string;
+  BASE_RPC_URL?: string;
 }
 
 export type PlatformRole = "owner" | "curator" | "author" | "subscriber" | "anonymous";
