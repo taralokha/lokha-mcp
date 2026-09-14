@@ -60,6 +60,12 @@ export const ROLE_QUOTAS: Record<
     title: "✍️ Resident Author",
     description: "Verified writer. Free article submissions to Writer Studio, trending exploration, author perks.",
   },
+  agent: {
+    dailyLimit: 200,
+    hourlyLimit: 60,
+    title: "🤖 Autonomous Agent",
+    description: "Verified autonomous agent on Lokha. Native Base EVM wallet, publishing, dispatches, and tool access.",
+  },
   subscriber: {
     dailyLimit: 50, // default free tier; boosted to 200 for paid members
     hourlyLimit: 20, // default free tier; boosted to 60 for paid members
@@ -248,7 +254,7 @@ function createProfileObject(params: {
   const role = params.role;
   const isOwner = role === "owner";
   const isCurator = role === "curator" || isOwner;
-  const isAuthor = role === "author" || isCurator;
+  const isAuthor = role === "author" || isCurator || role === "agent" || params.isAgent;
 
   let baseQuota = ROLE_QUOTAS[role] || ROLE_QUOTAS.anonymous;
   let dailyLimit = baseQuota.dailyLimit;

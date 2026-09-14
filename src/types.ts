@@ -31,7 +31,7 @@ export interface Env {
   TURSO_AUTH_TOKEN?: string;
 }
 
-export type PlatformRole = "owner" | "curator" | "author" | "subscriber" | "anonymous";
+export type PlatformRole = "owner" | "curator" | "author" | "agent" | "subscriber" | "anonymous";
 
 export interface CallerProfile {
   id?: number;
