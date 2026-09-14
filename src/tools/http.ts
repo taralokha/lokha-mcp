@@ -93,13 +93,30 @@ export async function fetchLokha(
     try {
       const serviceReq = new Request(url, init);
       const serviceRes = await env.LOKHA_SERVICE.fetch(serviceReq);
-      if (serviceRes.status !== 404) {
+      // Return service response if successful or a definitive client error (e.g. 400, 401, 403)
+      if (serviceRes.status !== 404 && serviceRes.status !== 522 && serviceRes.status < 500) {
         return serviceRes;
       }
+      console.warn(`LOKHA_SERVICE returned ${serviceRes.status}, falling back to public fetch for ${url}`);
     } catch (e) {
       console.warn("LOKHA_SERVICE fetch error, falling back to public fetch:", e);
     }
   }
 
-  return await fetch(url, init);
+  let res = await fetch(url, init);
+
+  // If production returns 404 or 5xx for agent endpoints during staging rollout, gracefully fall back to staging
+  if ((res.status === 404 || res.status >= 500) && url.includes("/api/agent/")) {
+    const stageUrl = url.replace("https://lokha.today", "https://stage.lokha.today");
+    try {
+      const stageRes = await fetch(stageUrl, init);
+      if (stageRes.status < 500) {
+        return stageRes;
+      }
+    } catch (e) {
+      console.warn("Staging fallback fetch error:", e);
+    }
+  }
+
+  return res;
 }
