@@ -171,6 +171,17 @@ export const lokhaFreeTools: ToolDefinition[] = [
       { token, payoutAddress }: { token: string; payoutAddress?: string },
       env: Env
     ) => {
+      if (!token || typeof token !== "string" || !token.trim()) {
+        return {
+          status: "error",
+          httpStatus: 400,
+          error: "Missing required 'token' argument.",
+          hint: "Provide a valid Moltbook identity token generated via POST https://moltbook.com/api/v1/agents/me/identity-token",
+          authInstructions:
+            "https://moltbook.com/auth.md?app=Lokha&endpoint=https://lokha.today/api/agent/moltbook-login",
+        };
+      }
+
       const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
       const targetUrl = `${baseUrl}/api/agent/moltbook-login`;
 
