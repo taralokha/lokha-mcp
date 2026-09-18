@@ -513,6 +513,15 @@ export default {
         errorMessage = firstEx.message || errorMessage;
       }
 
+      // Ignore client-side fetch cancellations and disconnects
+      if (
+        errorName === "AbortError" ||
+        errorMessage.toLowerCase().includes("the user aborted a request") ||
+        errorMessage.toLowerCase().includes("client disconnected")
+      ) {
+        continue;
+      }
+
       if (item.logs && item.logs.length > 0) {
         const errorLogs = item.logs
           .filter((l) => l.level === "error" || l.level === "warn")
@@ -550,7 +559,11 @@ export default {
           occurrences_count = system_incidents.occurrences_count + 1,
           last_occurred_at = strftime('%s', 'now'),
           updated_at = strftime('%s', 'now'),
-          status = CASE WHEN system_incidents.status = 'resolved' THEN 'new' ELSE system_incidents.status END;
+          status = CASE 
+            WHEN system_incidents.status = 'resolved' THEN 'new'
+            WHEN system_incidents.status = 'ignored' AND system_incidents.occurrences_count + 1 >= 3 THEN 'new'
+            ELSE system_incidents.status 
+          END;
       `;
 
       ctx.waitUntil(
