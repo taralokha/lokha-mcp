@@ -491,11 +491,15 @@ export default {
     if (!tursoToken) return;
 
     for (const item of events) {
-      const isOutcomeError = item.outcome !== "ok";
+      // Ignore normal operations and intentional client cancellations (tab closed, navigation aborts)
+      if (item.outcome === "ok" || item.outcome === "canceled") continue;
+
+      const isOutcomeError = item.outcome === "exception" || item.outcome === "exceededCpu" || item.outcome === "exceededMemory";
       const fetchInfo = item.event && "response" in item.event ? item.event : null;
       const status = fetchInfo?.response?.status || 0;
       const isHttp500 = status >= 500;
 
+      // Only record true unhandled server errors or fatal execution limits
       if (!isOutcomeError && !isHttp500) continue;
 
       const scriptName = item.scriptName || "lokha";
