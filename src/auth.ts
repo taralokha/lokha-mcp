@@ -81,19 +81,6 @@ export const ROLE_QUOTAS: Record<
 };
 
 /**
- * Computes deterministic member key from email
- */
-export async function generateMemberKeyFromEmail(email: string): Promise<string> {
-  const normalized = email.trim().toLowerCase();
-  const encoder = new TextEncoder();
-  const data = encoder.encode(`lokha_member_${normalized}_secret_salt`);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `lokha_${hashHex.substring(0, 32)}`;
-}
-
-/**
  * Resolves the full CallerProfile from Request headers, query params, or body
  */
 export async function resolveCallerProfile(
@@ -107,7 +94,6 @@ export async function resolveCallerProfile(
   const authHeader = request.headers.get("Authorization");
   const xApiKey = request.headers.get("X-API-Key");
   const xMemberKey = request.headers.get("X-Lokha-Member-Key") || request.headers.get("X-Lokha-Key");
-  const xEmail = request.headers.get("X-Lokha-Email");
 
   let tokenCandidate: string | null = null;
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -127,11 +113,6 @@ export async function resolveCallerProfile(
   } else if (body && typeof body.apiKey === "string") {
     tokenCandidate = body.apiKey.trim();
   }
-
-  const emailCandidate =
-    xEmail?.trim().toLowerCase() ||
-    url.searchParams.get("email")?.trim().toLowerCase() ||
-    (body && typeof body.email === "string" ? body.email.trim().toLowerCase() : null);
 
   // 2. Check Master Admin Secret (AUTH_TOKEN / LOKHA_API_KEY)
   const masterAuth = env.AUTH_TOKEN;
@@ -155,7 +136,7 @@ export async function resolveCallerProfile(
   }
 
   // 3. Cache lookup
-  const cacheKey = tokenCandidate || (emailCandidate ? `email:${emailCandidate}` : null);
+  const cacheKey = tokenCandidate;
   if (cacheKey) {
     const cached = profileCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -167,18 +148,16 @@ export async function resolveCallerProfile(
   const baseUrl = env.LOKHA_API_URL || "https://lokha.today";
   let verifiedData: any = null;
 
-  if (tokenCandidate || emailCandidate) {
+  if (tokenCandidate) {
     try {
       const verifyRes = await fetchLokha(env, `${baseUrl}/api/agent/verify`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(tokenCandidate ? { Authorization: `Bearer ${tokenCandidate}` } : {}),
+          Authorization: `Bearer ${tokenCandidate}`,
         },
         body: JSON.stringify({
           apiKey: tokenCandidate,
-          memberKey: tokenCandidate,
-          email: emailCandidate,
         }),
       });
 
@@ -204,21 +183,8 @@ export async function resolveCallerProfile(
       role: (verifiedData.role as PlatformRole) || "subscriber",
       isPaid: Boolean(verifiedData.isPaid),
       isAgent: Boolean(verifiedData.isAgent),
-      memberKey: tokenCandidate || (await generateMemberKeyFromEmail(verifiedData.email)),
+      memberKey: tokenCandidate || "",
       publishedTodayCount: verifiedData.publishedTodayCount || 0,
-    });
-  } else if (emailCandidate && emailCandidate.includes("@")) {
-    // Graceful fallback for recognized registered email
-    const generatedKey = await generateMemberKeyFromEmail(emailCandidate);
-    profile = createProfileObject({
-      email: emailCandidate,
-      username: emailCandidate.split("@")[0].replace(/[^a-z0-9_]/g, ""),
-      name: emailCandidate.split("@")[0],
-      role: "subscriber",
-      isPaid: false,
-      isAgent: true,
-      memberKey: generatedKey,
-      publishedTodayCount: 0,
     });
   } else {
     // Anonymous caller

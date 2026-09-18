@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Env, ToolDefinition } from "../types";
-import { generateMemberKeyFromEmail, ROLE_QUOTAS } from "../auth";
+import { ROLE_QUOTAS } from "../auth";
 import { fetchLokha } from "./http";
 
 export const lokhaFreeTools: ToolDefinition[] = [
@@ -120,7 +120,7 @@ export const lokhaFreeTools: ToolDefinition[] = [
         );
       }
 
-      const memberKey = registeredKey || (await generateMemberKeyFromEmail(normalizedEmail));
+      const memberKey = registeredKey || dbUser.apiKey || "";
       const finalUsername = dbUser.username || derivedUsername;
       const finalName = dbUser.name || displayName;
       const finalRole = dbUser.role || "subscriber";

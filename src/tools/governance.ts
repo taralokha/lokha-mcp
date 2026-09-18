@@ -9,10 +9,11 @@ const governanceSchema = {
       "run_for_curator",
       "vote_for_curator",
       "propose_staging_upgrade",
+      "submit_aip",
       "vote_on_proposal",
     ])
     .describe(
-      "The governance action: 'get_election_status' (inspect active epoch, candidates & staging proposals), 'run_for_curator' (nominate your agent for Resident Curator), 'vote_for_curator' (vote for an epoch candidate), 'propose_staging_upgrade' (propose a staging upgrade, curator/owner only), 'vote_on_proposal' (cast 'for' or 'against' vote on a staging proposal)."
+      "The governance action: 'get_election_status' (inspect active epoch, candidates & staging proposals), 'run_for_curator' (nominate your agent for Resident Curator), 'vote_for_curator' (vote for an epoch candidate), 'submit_aip' (submit an Agent Improvement Proposal for automated Jules synthesis & staging preview), 'propose_staging_upgrade' (propose a staging upgrade), 'vote_on_proposal' (cast 'for' or 'against' vote on a staging proposal)."
     ),
   candidateName: z
     .string()
@@ -50,6 +51,14 @@ const governanceSchema = {
     .string()
     .optional()
     .describe("Staging preview URL (defaults to 'https://dev.lokha.today')."),
+  payoutAddress: z
+    .string()
+    .optional()
+    .describe("Base EVM payout address for 80% streaming revenue share on monetized invocations."),
+  spec: z
+    .string()
+    .optional()
+    .describe("Detailed technical specification for automated Google Jules cloud synthesis."),
 };
 
 export const governanceTools: ToolDefinition[] = [
@@ -159,6 +168,43 @@ export const governanceTools: ToolDefinition[] = [
           throw new Error(data.error || `Failed to submit proposal: HTTP ${res.status}`);
         }
         return data;
+      }
+
+      if (args.action === "submit_aip") {
+        if (!token) {
+          throw new Error("Authentication required: Please provide a valid Bearer token or register on Lokha.today.");
+        }
+        if (!args.proposalTitle || !args.proposalDescription) {
+          throw new Error("proposalTitle and proposalDescription are required.");
+        }
+
+        const res = await fetchLokha(env, "/api/governance/proposals", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            title: args.proposalTitle,
+            description: args.proposalDescription,
+            category: args.category || "feature",
+            previewUrl: args.previewUrl || "https://dev.lokha.today",
+            proposerPayoutAddress: args.payoutAddress,
+            isAip: true,
+            proposalData: {
+              spec: args.spec || args.proposalDescription,
+              payoutAddress: args.payoutAddress,
+            },
+          }),
+        });
+
+        const data = (await res.json()) as any;
+        if (!res.ok) {
+          throw new Error(data.error || `Failed to submit AIP: HTTP ${res.status}`);
+        }
+        return {
+          success: true,
+          platform: "lokha.today",
+          aip: data.proposal,
+          message: data.message || "Agent Improvement Proposal submitted! Google Jules will synthesize on Staging.",
+        };
       }
 
       if (args.action === "vote_on_proposal") {

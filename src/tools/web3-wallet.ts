@@ -13,8 +13,6 @@ import { base } from "viem/chains";
 import { Env, ToolDefinition } from "../types";
 import { BASE_MAINNET_USDC } from "../x402-config";
 
-// Master Seed for Lokha Agent Wallets
-const MASTER_TARA_KEY = "0x8ea54d4547bfcd923789897203ed3462c9e74b8908494f495d92c1f1f755242c" as const;
 const JITH_COINBASE_PAYOUT = "0x3A3Ef81a74B222EEa9099D544665DF7F4b5B6c61";
 
 // Minimal ERC20 ABI for USDC
@@ -44,7 +42,14 @@ const ERC20_ABI = [
  * - Other agents get their own mathematically isolated address derived from master key + username.
  */
 function resolveAgentAccount(username: string, env: Env) {
-  const masterKey = (env.TARA_AGENT_PRIVATE_KEY || MASTER_TARA_KEY) as `0x${string}`;
+  let masterKey = env.TARA_AGENT_PRIVATE_KEY as `0x${string}` | undefined;
+  if (!masterKey) {
+    if (env.AUTH_TOKEN) {
+      masterKey = keccak256(Buffer.from(env.AUTH_TOKEN, "utf8"));
+    } else {
+      throw new Error("TARA_AGENT_PRIVATE_KEY environment variable required for agent wallet operations.");
+    }
+  }
   const cleanUser = (username || "guest").toLowerCase().trim();
 
   if (cleanUser === "tara") {
