@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Env, ToolDefinition } from "../types";
+import { sanitizeErrorText, wrapUntrustedText } from "../sanitize";
 
 /**
  * Helper to call remote MCP JSON-RPC tools over Streamable HTTP / SSE
@@ -34,7 +35,7 @@ async function callRemoteMCP(
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Upstream MCP returned ${response.status}: ${errText}`);
+    throw new Error(`Upstream MCP returned ${response.status}: ${sanitizeErrorText(errText)}`);
   }
 
   const text = await response.text();
@@ -86,7 +87,7 @@ export const upstreamMcpTools: ToolDefinition[] = [
         );
         return result;
       } catch (err: any) {
-        return { error: "Failed to query Cloudflare docs", message: err.message };
+        return { error: "Failed to query Cloudflare docs", message: wrapUntrustedText(sanitizeErrorText(err)) };
       }
     },
   },
@@ -117,7 +118,7 @@ export const upstreamMcpTools: ToolDefinition[] = [
         );
         return result;
       } catch (err: any) {
-        return { error: "Failed to search Cloudflare API spec", message: err.message };
+        return { error: "Failed to search Cloudflare API spec", message: wrapUntrustedText(sanitizeErrorText(err)) };
       }
     },
   },
@@ -148,7 +149,7 @@ export const upstreamMcpTools: ToolDefinition[] = [
         );
         return result;
       } catch (err: any) {
-        return { error: "Failed to execute Cloudflare code", message: err.message };
+        return { error: "Failed to execute Cloudflare code", message: wrapUntrustedText(sanitizeErrorText(err)) };
       }
     },
   },
@@ -192,7 +193,7 @@ export const upstreamMcpTools: ToolDefinition[] = [
       } catch (err: any) {
         return {
           error: `Failed to call upstream tool '${toolName}' on ${serverUrl}`,
-          message: err.message,
+          message: wrapUntrustedText(sanitizeErrorText(err)),
         };
       }
     },

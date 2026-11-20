@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Env, ToolDefinition } from "../types";
+import { sanitizeErrorText, wrapUntrustedText } from "../sanitize";
 
 export const httpTools: ToolDefinition[] = [
   {
@@ -71,7 +72,7 @@ export const httpTools: ToolDefinition[] = [
         clearTimeout(timeout);
         return {
           error: "HTTP Request failed",
-          message: err.message || String(err),
+          message: wrapUntrustedText(sanitizeErrorText(err)),
         };
       }
     },
