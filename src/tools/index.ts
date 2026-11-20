@@ -12,6 +12,7 @@ import { marketplaceTools } from "./marketplace";
 import { gumroadTools } from "./gumroad";
 import { evermindTools } from "./evermind";
 import { checkToolAccess, isToolPaymentRequired } from "../auth";
+import { formatErrorForAgent } from "../sanitize";
 
 export const allTools: ToolDefinition[] = [
   ...lokhaFreeTools,
@@ -100,7 +101,7 @@ export function registerAllTools(server: McpServer, env: Env, caller: CallerProf
             content: [
               {
                 type: "text" as const,
-                text: `Error executing tool '${tool.name}': ${err.message || String(err)}`,
+                text: formatErrorForAgent(`Error executing tool '${tool.name}'`, err),
               },
             ],
           };

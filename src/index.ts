@@ -12,6 +12,7 @@ import { allTools, registerAllTools, generateOpenAPISpec } from "./tools";
 import { createPaymentRequirement, verifyPayment } from "./x402-config";
 import { handleZernioWebhook } from "./zernio-webhook";
 import { handleGumroadWebhook } from "./gumroad-webhook";
+import { formatErrorForAgent } from "./sanitize";
 
 function createServer(env: Env, caller: CallerProfile) {
   const server = new McpServer({
@@ -455,7 +456,7 @@ export default {
         });
       } catch (err: any) {
         return new Response(
-          JSON.stringify({ error: err.message || String(err) }),
+          JSON.stringify({ error: formatErrorForAgent("Tool execution failed", err) }),
           {
             status: 500,
             headers: { "Content-Type": "application/json", ...corsHeaders },
